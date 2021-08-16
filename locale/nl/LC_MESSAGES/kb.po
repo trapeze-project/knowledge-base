@@ -1,0 +1,92 @@
+# Dutch translations for PACKAGE package.
+# Copyright (C) 2021 THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# Bert Bos <bert@w3.org>, 2021.
+#
+#: kb.php:92
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2021-08-16 13:05+0200\n"
+"PO-Revision-Date: 2021-08-16 13:09+0200\n"
+"Last-Translator: Bert Bos <bert@w3.org>\n"
+"Language-Team: Dutch\n"
+"Language: nl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "test"
+msgstr "nl"
+
+#: kb.php:11
+msgid ""
+"<html lang=en>\n"
+"<title>Missing or unknown ‘action’ parameter</title>\n"
+"<h1>Missing or unknown ‘action’ parameter</h1>\n"
+"<p>The ‘action’ parameter must be present and must be one of\n"
+"‘search’, ‘definitions’, ‘gdpr’ or ‘status’.\n"
+msgstr ""
+"<html lang=nl>\n"
+"<title>Ontbrekende of onbekende ‘action’-parameter</title>\n"
+"<h1>Ontbrekende of onbekende ‘action’-parameter</h1>\n"
+"<p>De parameter ‘action’ is verplicht en moet de waarde\n"
+"‘search’, ‘definitions’, ‘gdpr’ of ‘status’ hebben.\n"
+
+#: kb.php:21
+msgid ""
+"<html lang=en>\n"
+"<title>Not yet implemented</title>\n"
+"<p>Not yet implemented.\n"
+msgstr ""
+
+#: kb.php:29
+msgid ""
+"<html lang=en>\n"
+"<title>Missing ‘words’ parameter</title>\n"
+"<h1>Missing ‘words’ parameter</h1>\n"
+"<p>When the ‘action’ parameter is ‘search’,\n"
+"the ‘words’ parameter is required.\n"
+msgstr ""
+
+#: kb.php:39
+msgid ""
+"<html lang=en>\n"
+"<title>Missing ‘term’ parameter</title>\n"
+"<h1>Missing ‘term’ parameter</h1>\n"
+"<p>When the ‘action’ parameter is ‘definitions’,\n"
+"the ‘term’ parameter is required.\n"
+msgstr ""
+
+#: kb.php:49
+msgid ""
+"<html lang=en>\n"
+"<title>Missing ‘article’ parameter</title>\n"
+"<h1>Missing ‘article’ parameter</h1>\n"
+"<p>When the ‘action’ parameter is ‘gdpr’,\n"
+"the ‘article’ parameter is required.\n"
+msgstr ""
+
+#: kb.php:59
+msgid ""
+"<html lang=en>\n"
+"<title>No definition found</title>\n"
+"<p>No definition found.\n"
+msgstr ""
+
+#: kb.php:67
+msgid ""
+"<title>No such article</title>\n"
+"<h1>No such article</h1>\n"
+"<p>The requested article or clause does not exist.\n"
+msgstr ""
+
+#: kb.php:75
+msgid ""
+"<html lang=en>\n"
+"<title>Server error: Database not available</title>\n"
+"<h1>Server error: Database not available</h1>\n"
+"<p>An error occurred when trying to open the database.\n"
+msgstr ""
