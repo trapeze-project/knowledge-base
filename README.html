@@ -44,7 +44,7 @@
       ‘Accept-Language’ header determines the language of the
       response.</dd>
 
-    <dt>?action=gdpr&article=<var>number</var></dt>
+    <dt>?action=gdpr&amp;article=<var>number</var></dt>
 
     <dd>This returns a JSON file with the text of the given article of
       the GDPR. The number must be of the form ‘<var>number</var>’ or
@@ -54,6 +54,24 @@
       ‘3(2)(b)’ (sub-clause b of clause 2 of article 3). As above, the
       ‘Accept-Language’ header determines the language of the
       response.</dd>
-  </dl>
 
+    <dt>?action=dpa&amp;country=<var>XY</var></dt>
+    <dt>?action=dpa&amp;name=<var>text</var></dt>
+    <dt>?action=dpa</dt>
+
+    <dd>This returns a list of Data Protection Agencies. If a contry
+      code <var>XY</var> (ISO-3166 two-letter code) is given, the DPAs
+      for that country are returned (usually just one). If
+      a <var>text</var> is given, the DPAs whose names contain that
+      text are returned. If neither a country nor a name are given,
+      all DPAs are returned. For each DPA, the result contains the
+      country (two-letter ISO code), the name, the postal address, a
+      phone number, a fax number, an email address and a web address.
+      The fax number and the email address may be NULL. The
+      ‘Accept-Language’ header determines the language of the
+      response, but if no information in that language is available,
+      the result is in English. (Except for the third form of the
+      query, without language code or name, which always returns
+      results in English.)
+  </dl>
 

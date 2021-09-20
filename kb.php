@@ -79,6 +79,14 @@ function ERR_DATABASE()
 ');
 }
 
+function ERR_NO_SUCH_DPA()
+{
+  return _('<title>No such DPA</title>
+<h1>No such DPA</h1>
+<p>No Data Protection Agency exists for the selected country or with the given name.
+');
+}
+
 
 # get_languages -- parse an accept-language string into a sorted array
 function get_languages(string $lang)
@@ -183,7 +191,7 @@ function gdpr(object $db, array $langs)
   $stmt = $db->prepare($s);
 
   # Try the preferred languages until one succeeds.
-  for ($i = 0; $result == [] && $i < count($langs); $i++) {
+  for ($i = 0; $results == [] && $i < count($langs); $i++) {
     $stmt->bindValue(':l', $langs[$i], PDO::PARAM_STR);
     $stmt->bindValue(':a', $m[1], PDO::PARAM_INT);
     if ($m[2]) $stmt->bindValue(':c', $m[2], PDO::PARAM_INT);
@@ -193,19 +201,81 @@ function gdpr(object $db, array $langs)
       $n = $row['article'];
       if ($row['clause']) $n .= '(' . $row['clause'] . ')';
       if ($row['subclause']) $n .= '(' . $row['subclause'] . ')';
-      $result[] = [
+      $results[] = [
         '@context' => ['@language' => $row['language']],
         'n' => $n,
         'text' => $row['text']];
     }
   }
 
-  if ($result == [])
+  if ($results == [])
     return array(400, ERR_NO_SUCH_ARTICLE());
   else
-    return array(200, $result);
+    return array(200, $results);
 }
 
+
+# dpa -- return the address of a DPA, by country code or partial name
+function dpa(object $db, array $langs)
+{
+  $results = [];
+
+  $country = $_REQUEST['country'];
+  $partialname = $_REQUEST['name'];
+
+  # Create a SQL query.
+  # Note that parameters are used twice in a query. This only works
+  # when PDO::ATTR_EMULATE_PREPARES is set on the database handle.
+  if (isset($country)) {
+    $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
+      email, url FROM dpa WHERE lower(country) = lower(:country)
+      AND (language = :language OR (language = "en" AND
+        NOT EXISTS (SELECT * FROM dpa WHERE lower(country) = lower(:country)
+          AND language = :language)))');
+  } else if (isset($partialname)) {
+    $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
+      email, url FROM dpa WHERE name LIKE :partialname
+      AND (language = :language OR (language = "en" AND
+        NOT EXISTS (SELECT * FROM dpa WHERE name LIKE :partialname
+          AND language = :language)))');
+  } else {                      # Return addresses in English of all DPAs
+    $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
+      email, url FROM dpa WHERE language = "en"');
+  }
+
+  # Try the preferred languages until one succeeds.
+  $langs[] = 'en';              # Add English at the end
+  error_log("Starting executing query", 0);
+  for ($i = 0; $results == [] && $i < count($langs); $i++) {
+    error_log("Trying with language $langs[$i]", 0);
+    if (isset($country)) {
+      $stmt->bindValue(':language', $langs[$i], PDO::PARAM_STR);
+      $stmt->bindValue(':country', $country, PDO::PARAM_STR);
+    } else if (isset($partialname)) {
+      $stmt->bindValue(':language', $langs[$i], PDO::PARAM_STR);
+      $stmt->bindValue(':partialname', "%$partialname%", PDO::PARAM_STR);
+    }
+    $res = $stmt->execute();
+    if (!$res) {error_log("Execute failed", 0);}
+    while (($row = $stmt->fetch())) {
+      $results[] = [
+        '@context' => ['@language' => $row['language'] ],
+        'country' => $row['country'],
+        'name' => $row['name'],
+        'address' => $row['address'],
+        'tel' => $row['tel'],
+        'fax' => $row['fax'],
+        'email' => $row['email'],
+        'url' => $row['url'] ];
+    }
+  }
+
+  if ($results == [])
+    return array(400, ERR_NO_SUCH_DPA());
+  else
+    return array(200, $results);
+
+}
 
 # usage -- return an error message explaining how to use this service
 function usage(array $langs)
@@ -243,10 +313,12 @@ try {
 # Connect to our database, then dispatch the request to the appropriate handler.
 try {
   $db = new PDO(DSN);
+  $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
   switch ($_REQUEST['action']) {
     case 'search': list($status, $result) = search($db, $langs); break;
     case 'definitions': list($status, $result) = definitions($db, $langs);break;
     case 'gdpr': list($status, $result) = gdpr($db, $langs); break;
+    case 'dpa': list($status, $result) = dpa($db, $langs); break;
     case 'status': list($status, $result) = status($db, $langs); break;
     default: list($status, $result) = usage($langs);
   }
