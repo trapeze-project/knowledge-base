@@ -4,6 +4,12 @@
 
 define('DSN', 'sqlite:./database.db');
 
+# Namespaces.
+
+define('NS_DEFINITIONS', 'https://trapeze-project.eu/ns/definitions#');
+define('NS_GDPR', 'https://trapeze-project.eu/ns/gdpr#');
+define('NS_DPA', 'https://trapeze-project.eu/ns/dpa#');
+
 # Error messages. These functions call gettext() to return a localized message.
 
 function ERR_USAGE()
@@ -121,7 +127,9 @@ function find_definitions(object $db, array $langs, string $term)
     $stmt->execute([':t' => $term, ':l' => $langs[$i]]);
     while (($row = $stmt->fetch()))
       $result[] = [
-        '@context' => ['@language' => $row['language']],
+        '@context' => [
+          '@language' => $row['language'],
+          '@vocab' => NS_DEFINITIONS ],
         'term' => $row['term'],
         'definition' => $row['definition']];
   }
@@ -202,9 +210,11 @@ function gdpr(object $db, array $langs)
       if ($row['clause']) $n .= '(' . $row['clause'] . ')';
       if ($row['subclause']) $n .= '(' . $row['subclause'] . ')';
       $results[] = [
-        '@context' => ['@language' => $row['language']],
+        '@context' => [
+          '@language' => $row['language'],
+          '@vocab' => NS_GDPR ],
         'n' => $n,
-        'text' => $row['text']];
+        'text' => $row['text'] ];
     }
   }
 
@@ -228,26 +238,24 @@ function dpa(object $db, array $langs)
   # when PDO::ATTR_EMULATE_PREPARES is set on the database handle.
   if (isset($country)) {
     $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
-      email, url FROM dpa WHERE lower(country) = lower(:country)
+      email, url, modified FROM dpa WHERE lower(country) = lower(:country)
       AND (language = :language OR (language = "en" AND
         NOT EXISTS (SELECT * FROM dpa WHERE lower(country) = lower(:country)
           AND language = :language)))');
   } else if (isset($partialname)) {
     $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
-      email, url FROM dpa WHERE name LIKE :partialname
+      email, url, modified FROM dpa WHERE name LIKE :partialname
       AND (language = :language OR (language = "en" AND
         NOT EXISTS (SELECT * FROM dpa WHERE name LIKE :partialname
           AND language = :language)))');
   } else {                      # Return addresses in English of all DPAs
     $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
-      email, url FROM dpa WHERE language = "en"');
+      email, url, modified FROM dpa WHERE language = "en"');
   }
 
   # Try the preferred languages until one succeeds.
   $langs[] = 'en';              # Add English at the end
-  error_log("Starting executing query", 0);
   for ($i = 0; $results == [] && $i < count($langs); $i++) {
-    error_log("Trying with language $langs[$i]", 0);
     if (isset($country)) {
       $stmt->bindValue(':language', $langs[$i], PDO::PARAM_STR);
       $stmt->bindValue(':country', $country, PDO::PARAM_STR);
@@ -256,17 +264,19 @@ function dpa(object $db, array $langs)
       $stmt->bindValue(':partialname', "%$partialname%", PDO::PARAM_STR);
     }
     $res = $stmt->execute();
-    if (!$res) {error_log("Execute failed", 0);}
     while (($row = $stmt->fetch())) {
       $results[] = [
-        '@context' => ['@language' => $row['language'] ],
+        '@context' => [
+          '@language' => $row['language'],
+          '@vocab' => NS_DPA ],
         'country' => $row['country'],
         'name' => $row['name'],
         'address' => $row['address'],
         'tel' => $row['tel'],
         'fax' => $row['fax'],
         'email' => $row['email'],
-        'url' => $row['url'] ];
+        'url' => $row['url'],
+        'modified' => $row['modified'] ];
     }
   }
 
@@ -277,19 +287,20 @@ function dpa(object $db, array $langs)
 
 }
 
-# usage -- return an error message explaining how to use this service
-function usage(array $langs)
-{
-  return array(400, ERR_USAGE());
-}
-
 
 # status -- return some information about the service
-function status(?object $db, array $langs)
+function status(object $db, array $langs)
 {
   return array(200, ['status' => [
     'langs' => $langs,
     'cwd' => getcwd()]]);
+}
+
+
+# usage -- return an error message explaining how to use this service
+function usage(array $langs)
+{
+  return array(400, ERR_USAGE());
 }
 
 
@@ -314,6 +325,7 @@ try {
 try {
   $db = new PDO(DSN);
   $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
+
   switch ($_REQUEST['action']) {
     case 'search': list($status, $result) = search($db, $langs); break;
     case 'definitions': list($status, $result) = definitions($db, $langs);break;
