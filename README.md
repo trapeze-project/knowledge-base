@@ -22,7 +22,7 @@ The knowledge base can then be queried with URLs such as this:
 The currently implemented queries are of the following forms:
 
 <dl>
-<dt>?action=search&amp;words=_keywords_</dt>
+<dt>?action=search&amp;words=<var>keywords</var></dt>
 
 <dd>This returns a JSON file with definitions for the keywords (if
 available) and links to online articles related to the keywords. The
@@ -33,29 +33,29 @@ preferences expressed in the ‘Accept-Language’ header of the HTTP
 request determine what language the responses are in. In the absence
 of an ‘Accept-Language’ header, the response is in English.</dd>
 
-<dt>?action=definition&amp;term=_term_</dt>
+<dt>?action=definition&amp;term=<var>term</var></dt>
 
 <dd>This returns a JSON file with the definition (or definitions, if
 there are several) of the term. As above, the ‘Accept-Language’ header
 determines the language of the response.</dd>
 
-<dt>?action=gdpr&amp;article=_number_</dt>
+<dt>?action=gdpr&amp;article=<var>number</var></dt>
 
 <dd>This returns a JSON file with the text of the given article of the
-GDPR. The number must be of the form ‘_number_’ or
-‘_number_(_number_)’ or
-‘_number_(_number_)(_letter_)’, e.g., ‘1’
+GDPR. The number must be of the form ‘<var>number</var>’ or
+‘<var>number</var>(<var>number</var>)’ or
+‘<var>number</var>(<var>number</var>)(<var>letter</var>)’, e.g., ‘1’
 (the whole of article 1), ‘2(1)’ (clause 1 of article 2), or ‘3(2)(b)’
 (sub-clause b of clause 2 of article 3). As above, the
 ‘Accept-Language’ header determines the language of the response.</dd>
 
-<dt>?action=dpa&amp;country=_XY_</dt>
-<dt>?action=dpa&amp;name=_text_</dt>
+<dt>?action=dpa&amp;country=<var>XY</var></dt>
+<dt>?action=dpa&amp;name=<var>text</var></dt>
 <dt>?action=dpa</dt>
 
 <dd>This returns a list of Data Protection Agencies. If a contry code
-_XY_ (ISO-3166 two-letter code) is given, the DPAs for that country
-are returned (usually just one). If a _text_ is given, the DPAs
+<var>XY</var> (ISO-3166 two-letter code) is given, the DPAs for that country
+are returned (usually just one). If a <var>text</var> is given, the DPAs
 whose names contain that text are returned. If neither a country nor a
 name are given, all DPAs are returned. For each DPA, the result
 contains the country (two-letter ISO code), the name, the postal
