@@ -73,5 +73,15 @@
       the result is in English. (Except for the third form of the
       query, without language code or name, which always returns
       results in English.)
+
+    <dt>?action=articles&amp;words=<var>text</var>
+
+    <dd>This returns a list of URLs of documents whose abstract,
+      keywords, title or authors include the words from the
+      given <var>text</var>. The <var>text</var> should currently use
+      the syntax of the FTS5 full-text search engine for SQLite.  The
+      result is an array of records, where each record contains the
+      title, the abstract, the keywords, the authors, the kind of
+      document (article or slide set) and the URL of the document.
   </dl>
 
