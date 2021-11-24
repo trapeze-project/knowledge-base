@@ -9,6 +9,7 @@ define('DSN', 'sqlite:./database.db');
 define('NS_DEFINITIONS', 'https://trapeze-project.eu/ns/definitions#');
 define('NS_GDPR', 'https://trapeze-project.eu/ns/gdpr#');
 define('NS_DPA', 'https://trapeze-project.eu/ns/dpa#');
+define('NS_ARTICLES', 'https://trapeze-project.eu/ns/articles#');
 
 # Error messages. These functions call gettext() to return a localized message.
 
@@ -18,7 +19,7 @@ function ERR_USAGE()
 <title>Missing or unknown ‘action’ parameter</title>
 <h1>Missing or unknown ‘action’ parameter</h1>
 <p>The ‘action’ parameter must be present and must be one of
-‘search’, ‘definitions’, ‘gdpr’ or ‘status’.
+‘search’, ‘definitions’, ‘gdpr’, ‘articles’, or ‘status’.
 ');
 }
 
@@ -137,10 +138,44 @@ function find_definitions(object $db, array $langs, string $term)
 }
 
 
-# search_articles -- return array of online articles relevant to $words
-function search_articles(object $db, array $langs, array $words)
+# find_articles -- return array of online articles relevant to $words
+function find_articles(object $db, array $langs, string $words)
 {
-  return [];                    # Not yet implemented
+  # The $words should be a full-text search query with the syntax of FTS5
+  # See https://www.sqlite.org/fts5.html
+  # TODO: Limit the results if there are too many.
+
+  $stmt = $db->prepare('SELECT * FROM articles
+    WHERE :l = language AND articles MATCH :w ORDER BY RANK');
+
+  # Try the query for all languages until there is a result.
+  $result = [];
+  for ($i = 0; $result == [] && $i < count($langs); $i++) {
+    $stmt->execute([':w' => $words, ':l' => $langs[$i]]);
+    while (($row = $stmt->fetch()))
+      $result[] = [
+        '@context' => [
+          '@language' => $row['language'],
+          '@vocab' => NS_ARTICLES ],
+        'title' => $row['title'],
+        'abstract' => $row['abstract'],
+        'keywords' => $row['keywords'],
+        'authors' => $row['authors'],
+        'kind' => $row['kind'],
+        'url' => $row['url']];
+  }
+  return $result;
+}
+
+
+# articles -- return articles related to given keywords
+function articles(object $db, array $langs)
+{
+  $words = $_REQUEST['words'];
+  if (!isset($words)) return array(400, ERR_MISSING_WORDS());
+
+  $articles = find_articles($db, $langs, $words);
+  return array(200, ['articles' => $articles]);
 }
 
 
@@ -153,15 +188,16 @@ function search(object $db, array $langs)
   $info = ['definitions' => [], 'articles' => []];
 
   # A "word" is delimited by white space, or it is anything between quotes (")
-  $words = preg_split('/[,;\s]*"([^"]+)"[,;\s]*|[,;\s]+/', $words, 0,
+  $wordlist = preg_split('/[,;\s]*"([^"]+)"[,;\s]*|[,;\s]+/', $words, 0,
     PREG_SPLIT_NO_EMPTY | PREG_SPLIT_DELIM_CAPTURE);
 
   # See if we have definitions for the words.
-  foreach ($words as $word)
+  foreach ($wordlist as $word)
     array_push($info['definitions'], ...find_definitions($db, $langs, $word));
 
-  # See if there are online articles relevant to the words.
-  array_push($info['articles'], search_articles($db, $langs, $words));
+  # See if there are online articles with any of the words.
+  $text = '"' . implode('" OR "', $wordlist) . '"';
+  array_push($info['articles'], ...find_articles($db, $langs, $text));
 
   return array(200, $info);
 }
@@ -332,6 +368,7 @@ try {
     case 'gdpr': list($status, $result) = gdpr($db, $langs); break;
     case 'dpa': list($status, $result) = dpa($db, $langs); break;
     case 'status': list($status, $result) = status($db, $langs); break;
+    case 'articles': list($status, $result) = articles($db, $langs); break;
     default: list($status, $result) = usage($langs);
   }
 } catch (PDOException $e) {
