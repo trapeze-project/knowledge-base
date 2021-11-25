@@ -20,7 +20,7 @@ function ERR_USAGE()
 <h1>Missing or unknown ‘action’ parameter</h1>
 <p>The ‘action’ parameter must be present and must be one of
 ‘search’, ‘definitions’, ‘gdpr’, ‘articles’, or ‘status’.
-');
+  ');
 }
 
 function ERR_NOT_IMPLEMENTED()
@@ -28,7 +28,7 @@ function ERR_NOT_IMPLEMENTED()
   return _('<html lang=en>
 <title>Not yet implemented</title>
 <p>Not yet implemented.
-');
+  ');
 }
 
 function ERR_MISSING_WORDS()
@@ -38,7 +38,7 @@ function ERR_MISSING_WORDS()
 <h1>Missing ‘words’ parameter</h1>
 <p>When the ‘action’ parameter is ‘search’,
 the ‘words’ parameter is required.
-');
+  ');
 }
 
 function ERR_MISSING_TERM()
@@ -48,7 +48,7 @@ function ERR_MISSING_TERM()
 <h1>Missing ‘term’ parameter</h1>
 <p>When the ‘action’ parameter is ‘definitions’,
 the ‘term’ parameter is required.
-');
+  ');
 }
 
 function ERR_MISSING_ARTICLE()
@@ -58,7 +58,7 @@ function ERR_MISSING_ARTICLE()
 <h1>Missing ‘article’ parameter</h1>
 <p>When the ‘action’ parameter is ‘gdpr’,
 the ‘article’ parameter is required.
-');
+  ');
 }
 
 function ERR_NO_DEFINITION()
@@ -66,7 +66,7 @@ function ERR_NO_DEFINITION()
   return _('<html lang=en>
 <title>No definition found</title>
 <p>No definition found.
-');
+  ');
 }
 
 function ERR_NO_SUCH_ARTICLE()
@@ -74,7 +74,7 @@ function ERR_NO_SUCH_ARTICLE()
   return _('<title>No such article</title>
 <h1>No such article</h1>
 <p>The requested article or clause does not exist.
-');
+  ');
 }
 
 function ERR_DATABASE()
@@ -83,7 +83,7 @@ function ERR_DATABASE()
 <title>Server error: Database not available</title>
 <h1>Server error: Database not available</h1>
 <p>An error occurred when trying to open the database.
-');
+  ');
 }
 
 function ERR_NO_SUCH_DPA()
@@ -91,7 +91,7 @@ function ERR_NO_SUCH_DPA()
   return _('<title>No such DPA</title>
 <h1>No such DPA</h1>
 <p>No Data Protection Agency exists for the selected country or with the given name.
-');
+  ');
 }
 
 
@@ -189,7 +189,7 @@ function search(object $db, array $langs)
 
   # A "word" is delimited by white space, or it is anything between quotes (")
   $wordlist = preg_split('/[,;\s]*"([^"]+)"[,;\s]*|[,;\s]+/', $words, 0,
-    PREG_SPLIT_NO_EMPTY | PREG_SPLIT_DELIM_CAPTURE);
+			 PREG_SPLIT_NO_EMPTY | PREG_SPLIT_DELIM_CAPTURE);
 
   # See if we have definitions for the words.
   foreach ($wordlist as $word)
@@ -227,7 +227,7 @@ function gdpr(object $db, array $langs)
     return array(400, ERR_INVALID_ARTICLE());
 
   # Create query based on whether articles, clauses or sub-clauses are desired.
-  $s = 'SELECT language, article, clause, subclause, text FROM gdpr
+  $s = 'SELECT language, article, clause, subclause, eli, text FROM gdpr
     WHERE language = :l AND article = :a';
   if ($m[2]) $s .= ' AND clause = :c';
   if ($m[3]) $s .= ' AND subclause = :s';
@@ -250,6 +250,7 @@ function gdpr(object $db, array $langs)
           '@language' => $row['language'],
           '@vocab' => NS_GDPR ],
         'n' => $n,
+	'eli' => $row['eli'],
         'text' => $row['text'] ];
     }
   }
