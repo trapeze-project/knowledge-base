@@ -53,7 +53,8 @@ GDPR. The number must be of the form ‘<var>number</var>’ or
 <dt>?action=dpa&amp;name=<var>text</var></dt>
 <dt>?action=dpa</dt>
 
-<dd>This returns a list of Data Protection Agencies. If a contry code
+<dd>This returns a JSON file with a list of Data Protection
+Agencies. If a contry code
 <var>XY</var> (ISO-3166 two-letter code) is given, the DPAs for that country
 are returned (usually just one). If a <var>text</var> is given, the DPAs
 whose names contain that text are returned. If neither a country nor a
@@ -68,7 +69,8 @@ code or name, which always returns results in English.)
 
 <dt>?action=articles&amp;words=<var>text</var>
 
-<dd>This returns a list of URLs of documents whose abstract, keywords,
+<dd>This returns a JSON file with a list of URLs of documents whose
+abstract, keywords,
 title or authors include the words from the given <var>text</var>. The
 <var>text</var> should currently use the syntax of the FTS5 full-text
 search engine for SQLite.  The result is an array of records, where
