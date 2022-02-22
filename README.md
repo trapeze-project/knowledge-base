@@ -77,5 +77,16 @@ search engine for SQLite.  The result is an array of records, where
 each record contains the title, the abstract, the keywords, the
 authors, the kind of document (article or slide set) and the URL of
 the document.
+
+<dt>?action=dpv&amp;term=<var>term</var></dt>
+
+<dd>This returns a JSON file with the definition of a term from the
+[DPV vocabulary](https://w3c.github.io/dpv/dpv/). The term can be a
+full URL (e.g., ‘https://w3id.org/dpv#Transfer’) or just the term
+relative to the vocabulary (e.g., ‘Transfer’). As above, the
+‘Accept-Language’ header determines the language of the response. (At
+the moment, labels, notes and human-readable definitions are only
+available in English.)</dd>
+
 </dl>
 
