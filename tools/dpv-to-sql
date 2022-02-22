@@ -1,0 +1,193 @@
+#!/bin/bash -p
+#
+# Helper to download the DPV vocabulary (in JSON-LD) and create SQL
+# statements to insert the vocabulary into the database.
+#
+# Run this script as
+#
+#    ./tools/dpv-to-sql >dpv.sql
+#
+# to create SQL statements in dpv.sql and then run
+#
+#    sqlite3 -batch database.db <dpv.sql
+#
+# to (re)create the tables in database.db.
+#
+# Requires curl and jshon.
+#
+# This is not designed to be fast.
+#
+# Created: 21 February 2022
+# Author: Bert Bos <bert@w3.org>
+
+SOURCE=https://w3c.github.io/dpv/dpv/dpv.jsonld
+
+DC_CREATED='http://purl.org/dc/terms/created'
+DC_CREATOR='http://purl.org/dc/terms/creator'
+DC_SOURCE='http://purl.org/dc/terms/source'
+DPV_ISSUBTYPEOF='https://w3id.org/dpv#isSubTypeOf'
+SKOS_DEFINITION='http://www.w3.org/2004/02/skos/core#definition'
+SKOS_LABEL='http://www.w3.org/2004/02/skos/core#prefLabel'
+SKOS_NOTE='http://www.w3.org/2004/02/skos/core#note'
+SKOS_RELATED='http://www.w3.org/2004/02/skos/core#related'
+SW_TERMSTATUS='http://www.w3.org/2003/06/sw-vocab-status/ns#term_status'
+
+
+# die -- print error message and exit
+function die
+{
+  echo "$@" >&2
+  exit 1
+}
+
+
+set -u +a -o pipefail
+
+declare -i i j n m
+
+# Download the DPV vocabulary in JSON-LD format into a temporary file.
+trap 'rm $TMP' 0
+TMP=`mktemp /tmp/dpv-XXXXXX` || exit 1
+curl -s -f $SOURCE >$TMP || die "Failed to download $SOURCE"
+# TMP=tmp.jsonld
+
+# Remove any existing tables and create new ones.
+#
+echo "DROP TABLE IF EXISTS dpv_related;"
+echo "DROP TABLE IF EXISTS dpv_sources;"
+echo "DROP TABLE IF EXISTS dpv_notes;"
+echo "DROP TABLE IF EXISTS dpv_labels;"
+echo "DROP TABLE IF EXISTS dpv_definitions;"
+echo "DROP TABLE IF EXISTS dpv_creators;"
+echo "DROP TABLE IF EXISTS dpv_terms;"
+echo
+echo "CREATE TABLE dpv_terms (\
+  term TEXT PRIMARY KEY,\
+  created TEXT,\
+  term_status TEXT,\
+  is_sub_type_of TEXT);"
+echo "CREATE TABLE dpv_creators (\
+  creator TEXT NOT NULL,\
+  term TEXT REFERENCES dpv_terms);"
+echo "CREATE TABLE dpv_definitions (\
+  language TEXT,\
+  term TEXT REFERENCES dpv_terms,\
+  definition TEXT NOT NULL);"
+echo "CREATE TABLE dpv_labels (\
+  language TEXT,\
+  term TEXT REFERENCES dpv_terms,\
+  label TEXT NOT NULL);"
+echo "CREATE TABLE dpv_notes (\
+  language TEXT,\
+  term TEXT REFERENCES dpv_terms,\
+  note TEXT NOT NULL);"
+echo "CREATE TABLE dpv_sources (\
+  term TEXT REFERENCES dpv_terms,\
+  source TEXT NOT NULL);"
+echo "CREATE TABLE dpv_related (\
+  term TEXT REFERENCES dpv_terms,\
+  related TEXT NOT NULL);"
+echo
+
+# Loop over the items in the JSON array and translate them to SQL
+# statements.
+#
+n=$(jshon -Q -F $TMP -l)
+for ((i = 0; i < n; i++)); do
+
+  echo -e "$i/$n\r\c" >&2
+
+  echo "-- Item $i"
+
+  # Store one item in a variable, so that jshon only has to parse that
+  # one item.
+  #
+  item=$(jshon -F $TMP -e $i -j)
+
+  # The @id is the term to define. It has zero or one creation date,
+  # zero or one status (typically "accepted"), and zero or one
+  # superclass. TODO: All of these are arrays in the JSON, can they
+  # ever be more than one?
+  #
+  h=$(jshon -Q -e @id -u <<<"$item")
+  [[ -n "$h" ]] && term=\"${h//\"/\"\"}\" || die "No @id in item $i"
+  h=$(jshon -Q -e $DC_CREATED -e 0 -e @value -u <<<"$item")
+  [[ -n "$h" ]] && created=\"${h//\"/\"\"}\" || created=NULL
+  h=$(jshon -Q -e $SW_TERMSTATUS -e 0 -e @value -u <<<"$item")
+  [[ -n "$h" ]] && term_status=\"${h//\"/\"\"}\" || term_status=NULL
+  h=$(jshon -Q -e $DPV_ISSUBTYPEOF -e 0 -e @id -u <<<"$item")
+  [[ -n "$h" ]] && is_sub_type_of=\"${h//\"/\"\"}\" || is_sub_type_of=NULL
+  echo "INSERT INTO dpv_terms (term, created, term_status, is_sub_type_of)\
+    VALUES ($term, $created, $term_status, $is_sub_type_of);"
+
+  # Each term has zero or more creators (people who helped develop
+  # it). Store those in the dpv_creators table.
+  #
+  m=$(jshon -Q -e $DC_CREATOR -l <<<"$item") || m=0
+  for ((j = 0; j < m; j++)); do
+    h=$(jshon -Q -e $DC_CREATOR -e $j -e @value -u <<<"$item")
+    [[ -n "$h" ]] && creator=\"${h//\"/\"\"}\" || die "Empty creator on item $i"
+    echo "INSERT INTO dpv_creators (creator, term) VALUES ($creator, $term);"
+  done
+
+  # Each term has definitions in zero or more languages. Store those
+  # in the dpv_definitions table. TODO: Should we check that there is
+  # at least an English one?
+  #
+  m=$(jshon -Q -e $SKOS_DEFINITION -l <<<"$item") || m=0
+  for ((j = 0; j < m; j++)); do
+    h=$(jshon -Q -e $SKOS_DEFINITION -e $j -e @value -u <<<"$item")
+    [[ -n "$h" ]] && def=\"${h//\"/\"\"}\" || die "Empty definition on item $i"
+    h=$(jshon -Q -e $SKOS_DEFINITION -e $j -e @language -u <<<"$item")
+    [[ -n "$h" ]] && language=\"${h//\"/\"\"}\" || language=NULL
+    echo "INSERT INTO dpv_definitions (language, term, definition)\
+      VALUES ($language, $term, $def);"
+  done
+
+  # Each term has labels (human-readable names) in zero or more
+  # languages. Store those in the dpv_labels table. TODO: Should we
+  # check that there is at least an English one?
+  #
+  m=$(jshon -Q -e $SKOS_LABEL -l <<<"$item") || m=0
+  for ((j = 0; j < m; j++)); do
+    h=$(jshon -Q -e $SKOS_LABEL -e $j -e @value -u <<<"$item")
+    [[ -n "$h" ]] && label=\"${h//\"/\"\"}\" || die "Empty label on item $i"
+    h=$(jshon -Q -e $SKOS_LABEL -e $j -e @language -u <<<"$item")
+    [[ -n "$h" ]] && language=\"${h//\"/\"\"}\" || language=NULL
+    echo "INSERT INTO dpv_labels (language, term, label)\
+      VALUES ($language, $term, $label);"
+  done
+
+  # Each term has notes in zero or more languages. Store those in the
+  # dpv_notes table.
+  #
+  m=$(jshon -Q -e $SKOS_NOTE -l <<<"$item") || m=0
+  for ((j = 0; j < m; j++)); do
+    h=$(jshon -Q -e $SKOS_NOTE -e $j -e @value -u <<<"$item")
+    [[ -n "$h" ]] && note=\"${h//\"/\"\"}\" || die "Empty note on item $i"
+    h=$(jshon -Q -e $SKOS_NOTE -e $j -e @language -u <<<"$item")
+    [[ -n "$h" ]] && language=\"${h//\"/\"\"}\" || language=NULL
+    echo "INSERT INTO dpv_notes (language, term, note) VALUES ($language, $term, $note);"
+  done
+
+  # Each term has zero or more sources (documents by which this term
+  # was inspired). Each source is a URL.
+  #
+  m=$(jshon -Q -e $DC_SOURCE -l <<<"$item") || m=0
+  for ((j = 0; j < m; j++)); do
+    h=$(jshon -Q -e $DC_SOURCE -e $j -e @id -u <<<"$item")
+    [[ -n "$h" ]] && source=\"${h//\"/\"\"}\" || die "Empty source on item $i"
+    echo "INSERT INTO dpv_sources (term, source) VALUES ($term, $source);"
+  done
+
+  # Each term has zero or more related terms. Each related term is a URL.
+  #
+  m=$(jshon -Q -e $SKOS_RELATED -l <<<"$item") || m=0
+  for ((j = 0; j < m; j++)); do
+    h=$(jshon -Q -e $SKOS_RELATED -e $j -e @id -u <<<"$item")
+    [[ -n "$h" ]] && related=\"${h//\"/\"\"}\" || die "Empty related on item $i"
+    echo "INSERT INTO dpv_related (term, related) VALUES ($term, $related);"
+  done
+
+  echo
+done
