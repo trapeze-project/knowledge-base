@@ -2,6 +2,8 @@
 
 ## Running the knowledge base
 
+### On a PHP webserver
+
 The current knowledge base is a CGI script, written in PHP, and thus
 meant to be run under a web server capable of running PHP.
 
@@ -16,6 +18,23 @@ server listening on port 9999.)
 The knowledge base can then be queried with URLs such as this:
 
     http://localhost:9999/kb.php?action=definitions&term=gdpr
+
+### As a Docker container
+
+You can build the current repository as a docker container using the following command, once in the directory.
+
+    docker build -t $image_name ./ 
+Where $image_name could for example be "tpz/knowledge-base".
+
+After that, you can run the image like so:
+
+    docker run -p $port:80 $image_name
+
+Where $port is the port you want to bind this container on your machine (make sure it's free), for example: "8080".
+
+The knowledge base should then be available on:
+
+    http://localhost:$port/kb.php?action=definitions&term=gdpr
 
 ## API
 
