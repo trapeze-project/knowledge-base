@@ -2,6 +2,8 @@
 
 ## Running the knowledge base
 
+### On a PHP web server
+
 The current knowledge base is a CGI script, written in PHP, and thus
 meant to be run under a web server capable of running PHP.
 
@@ -17,6 +19,23 @@ The knowledge base can then be queried with URLs such as this:
 
     http://localhost:9999/kb.php?action=definitions&term=gdpr
 
+### As a Docker container
+
+You can build the current repository as a docker container using the following command, once in the directory.
+
+    docker build -t $image_name ./ 
+Where $image_name could for example be "tpz/knowledge-base".
+
+After that, you can run the image like so:
+
+    docker run -p $port:80 $image_name
+
+Where $port is the port you want to bind this container on your machine (make sure it's free), for example: "8080".
+
+The knowledge base should then be available on:
+
+    http://localhost:$port/kb.php?action=definitions&term=gdpr
+
 ## API
 
 The currently implemented queries are of the following forms:
@@ -26,9 +45,9 @@ The currently implemented queries are of the following forms:
 
 <dd>This returns a JSON file with definitions for the keywords (if
 available) and links to online articles related to the keywords. The
-keywords must separated by spaces, commas or semicolons. A term
+keywords must be separated by spaces, commas or semicolons. A term
 consisting of two or more words can be enclosed in double quotes. (The
-punctuation must be %-escaped to make a valid URL. The language
+punctuation must be %-escaped to make a valid URL.) The language
 preferences expressed in the ‘Accept-Language’ header of the HTTP
 request determine what language the responses are in. In the absence
 of an ‘Accept-Language’ header, the response is in English.</dd>
@@ -54,7 +73,7 @@ GDPR. The number must be of the form ‘<var>number</var>’ or
 <dt>?action=dpa</dt>
 
 <dd>This returns a JSON file with a list of Data Protection
-Agencies. If a contry code
+Agencies. If a country code
 <var>XY</var> (ISO-3166 two-letter code) is given, the DPAs for that country
 are returned (usually just one). If a <var>text</var> is given, the DPAs
 whose names contain that text are returned. If neither a country nor a
@@ -77,5 +96,16 @@ search engine for SQLite.  The result is an array of records, where
 each record contains the title, the abstract, the keywords, the
 authors, the kind of document (article or slide set) and the URL of
 the document.
+
+<dt>?action=dpv&amp;term=<var>term</var></dt>
+
+<dd>This returns a JSON file with the definition of a term from the
+[DPV vocabulary](https://w3c.github.io/dpv/dpv/). The term can be a
+full URL (e.g., ‘https://w3id.org/dpv#Transfer’) or just the term
+relative to the vocabulary (e.g., ‘Transfer’). As above, the
+‘Accept-Language’ header determines the language of the response. (At
+the moment, labels, notes and human-readable definitions are only
+available in English.)</dd>
+
 </dl>
 

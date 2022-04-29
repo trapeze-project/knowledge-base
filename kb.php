@@ -12,9 +12,9 @@ define('DC_SOURCE', 'http://purl.org/dc/terms/source');
 define('DPV', 'https://w3id.org/dpv#');
 define('DPV_CONCEPT', 'https://w3id.org/dpv#Concept');
 define('DPV_ISSUBTYPEOF', 'https://w3id.org/dpv#isSubTypeOf');
-define('NS_ARTICLES', 'https://trapeze-project.eu/ns/articles#');
-define('NS_DEFINITIONS', 'https://trapeze-project.eu/ns/definitions#');
-define('NS_DPA', 'https://trapeze-project.eu/ns/dpa#');
+define('DC_TERMS', 'http://purl.org/dc/terms/');
+define('DC_VALID', 'http://purl.org/dc/terms/valid');
+define('SCHEMA_ORG', 'http://schema.org/');
 define('NS_GDPR', 'https://trapeze-project.eu/ns/gdpr#');
 define('RDF_ISDEFINEDBY', 'http://www.w3.org/2000/01/rdf-schema#isDefinedBy');
 define('SCHEMA_DATE', 'http://www.w3.org/2001/XMLSchema#date');
@@ -164,7 +164,9 @@ function find_definitions(object $db, array $langs, string $term)
       $result[] = [
         '@context' => [
           '@language' => $row['language'],
-          '@vocab' => NS_DEFINITIONS ],
+          'term' => 'http://www.w3.org/ns/lemon/ontolex#writtenRep',
+          'definition' => 'http://www.lexinfo.net/ontology/2.0/lexinfo#gloss' ],
+        '@type' => 'http://www.w3.org/ns/lemon/ontolex#Word',
         'term' => $row['term'],
         'definition' => $row['definition']];
   }
@@ -190,7 +192,11 @@ function find_articles(object $db, array $langs, string $words)
       $result[] = [
         '@context' => [
           '@language' => $row['language'],
-          '@vocab' => NS_ARTICLES ],
+          '@vocab' => DC_TERMS,
+          'keywords' => '@subject',
+          'authors' => '@creator',
+          'kind' => '@type',
+          'url' => '@identifier' ],
         'title' => $row['title'],
         'abstract' => $row['abstract'],
         'keywords' => $row['keywords'],
@@ -339,7 +345,12 @@ function dpa(object $db, array $langs)
       $results[] = [
         '@context' => [
           '@language' => $row['language'],
-          '@vocab' => NS_DPA ],
+          '@vocab' => SCHEMA_ORG,
+          'country' => '@addressCountry',
+          'address' => '@streetAddress',
+          'tel' => '@telephone',
+          'fax' => '@faxNumber',
+          'modified' => DC_VALID ],
         'country' => $row['country'],
         'name' => $row['name'],
         'address' => $row['address'],
