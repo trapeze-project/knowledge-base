@@ -25,6 +25,8 @@ define('SKOS_NOTE', 'http://www.w3.org/2004/02/skos/core#note');
 define('SKOS_PREFLABEL', 'http://www.w3.org/2004/02/skos/core#prefLabel');
 define('SKOS_RELATED', 'http://www.w3.org/2004/02/skos/core#related');
 define('SW_TERMSTATUS', 'http://www.w3.org/2003/06/sw-vocab-status/ns#term_status');
+define('DPA', 'https://w3id.org/dpv#DataProtectionAuthority');
+define('NS_SEARCH_RESULTS', 'https://trapeze-project.eu/ns/search-results#');
 
 # Error messages. These functions call gettext() to return a localized message.
 
@@ -225,7 +227,10 @@ function search(object $db, array $langs)
   $words = $_REQUEST['words'];
   if (!isset($words)) return array(400, ERR_MISSING_WORDS());
 
-  $info = ['definitions' => [], 'articles' => []];
+  $info = [
+    '@context' => ['@vocab' => NS_SEARCH_RESULTS],
+    'definitions' => [],
+    'articles' => []];
 
   # A "word" is delimited by white space, or it is anything between quotes (")
   $wordlist = preg_split('/[,;\s]*"([^"]+)"[,;\s]*|[,;\s]+/', $words, 0,
@@ -315,19 +320,19 @@ function dpa(object $db, array $langs)
   # when PDO::ATTR_EMULATE_PREPARES is set on the database handle.
   if (isset($country)) {
     $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
-      email, url, modified FROM dpa WHERE lower(country) = lower(:country)
+      email, url, id, modified FROM dpa WHERE lower(country) = lower(:country)
       AND (language = :language OR (language = "en" AND
         NOT EXISTS (SELECT * FROM dpa WHERE lower(country) = lower(:country)
           AND language = :language)))');
   } else if (isset($partialname)) {
     $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
-      email, url, modified FROM dpa WHERE name LIKE :partialname
+      email, url, id, modified FROM dpa WHERE name LIKE :partialname
       AND (language = :language OR (language = "en" AND
         NOT EXISTS (SELECT * FROM dpa WHERE name LIKE :partialname
           AND language = :language)))');
   } else {                      # Return addresses in English of all DPAs
     $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
-      email, url, modified FROM dpa WHERE language = "en"');
+      email, url, id, modified FROM dpa WHERE language = "en"');
   }
 
   # Try the preferred languages until one succeeds.
@@ -351,6 +356,8 @@ function dpa(object $db, array $langs)
           'tel' => '@telephone',
           'fax' => '@faxNumber',
           'modified' => DC_VALID ],
+        '@type' => DPA,
+        '@id' => $row['id'],
         'country' => $row['country'],
         'name' => $row['name'],
         'address' => $row['address'],
