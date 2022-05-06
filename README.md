@@ -52,11 +52,15 @@ preferences expressed in the ‘Accept-Language’ header of the HTTP
 request determine what language the responses are in. In the absence
 of an ‘Accept-Language’ header, the response is in English.</dd>
 
-<dt>?action=definition&amp;term=<var>term</var></dt>
+<dt>?action=definitions&amp;term=<var>term</var></dt>
 
 <dd>This returns a JSON file with the definition (or definitions, if
 there are several) of the term. As above, the ‘Accept-Language’ header
-determines the language of the response.</dd>
+determines the language of the response. E.g., if the knowledge base
+is running on localhost port 9999, you can get the definition of the
+the Italian term ‘archivio’ like this: <code>curl -H 'Accept-Language:
+it'
+'http://localhost:9999/kb.php?action=definitions&term=archivio'</code></dd>
 
 <dt>?action=gdpr&amp;article=<var>number</var></dt>
 
