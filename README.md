@@ -113,3 +113,7 @@ available in English.)</dd>
 
 </dl>
 
+A simple user interface for querying the knowledge base is
+available by using ‘?action=debug’ as the query and opening the URL in
+a browser (e.g.,
+<code>http://localhost:9999/kb.php?action=debug</code>).
