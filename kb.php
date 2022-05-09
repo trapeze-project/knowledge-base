@@ -583,8 +583,9 @@ function usage(array $langs)
 # Check what languages the client prefers. Use the "lang" parameter if
 # given, otherwise the Accept-Language headers if it is present, and
 # fall back to "en" (English).
-$langs = get_languages($_REQUEST['lang'] ? $_REQUEST['lang'] :
-  ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] : 'en'));
+$langs = get_languages(!empty($_REQUEST['lang']) ? $_REQUEST['lang'] :
+  (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] :
+    'en'));
 
 # Set up localization of error messages according to the client's languages.
 # If that fails (PHP was not compiled with libintl), make _() a no-op.
