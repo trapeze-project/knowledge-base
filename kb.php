@@ -32,11 +32,91 @@ define('NS_SEARCH_RESULTS', 'https://trapeze-project.eu/ns/search-results#');
 
 function ERR_USAGE()
 {
-  return _('<html lang=en>
+  return _('<!DOCTYPE html>
+<html lang=en>
 <title>Missing or unknown ‘action’ parameter</title>
-<h1>Missing or unknown ‘action’ parameter</h1>
-<p>The ‘action’ parameter must be present and must be one of
-‘search’, ‘definitions’, ‘gdpr’, ‘articles’, or ‘status’.
+<style>
+  body {background: #fff; color: black; margin: 3em 5% 6em;
+    font-family: Arial, sans-serif}
+  .error {color: #D00}
+  .error + p {margin-top: 3em}
+  form {border: solid thin; border-radius: 0.5em; padding: 1em 1em 0.5em 1em;
+    margin: 3em 0; /*box-shadow: 0 2px 4px #AAA*/}
+  h1, h2 {font-family: Archivo Black, Arial Black, Arial, sans-serif;
+    font-weight: 900}
+  h2 {line-height: 1.5; display: inline; background: 0 0.62em / 100% 0.4em
+    no-repeat linear-gradient(to bottom, #EED216, #EED216)}
+</style>
+
+<h1 class=error>Missing or unknown ‘action’ parameter</h1>
+
+<p class=error>The ‘action’ parameter must be present and must be one
+of ‘search’, ‘definitions’, ‘gdpr’, ‘articles’, or ‘status’.
+
+<p>You can use the forms below for testing:
+
+<form action="http://localhost:9999/kb.php">
+<input type=hidden name=action value=definitions>
+<h2><span>Search definitions of terms</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>Term: <input name=term></label> <input type=submit value=Submit></p>
+</form>
+
+<form action="http://localhost:9999/kb.php">
+<input type=hidden name=action value=gdpr>
+<h2><span>Search GDPR articles by number</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>Article: <input name=article></label> <input type=submit value=Submit>
+</form>
+
+<form action="http://localhost:9999/kb.php">
+<input type=hidden name=action value=dpa>
+<h2><span>Search DPAs by country</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>Country code: <input name=country></label> <input type=submit value=Submit>
+</form>
+
+<form action="http://localhost:9999/kb.php">
+<input type=hidden name=action value=dpa>
+<h2><span>Search DPAs by name</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>(Partial) name: <input name=name></label> <input type=submit value=Submit>
+</form>
+
+<form action="http://localhost:9999/kb.php">
+<input type=hidden name=action value=articles>
+<h2><span>Search articles by words from the title or abstract</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>Words: <input name=words title="May use NEAR(…), AND, OR, NOT and …*."></label> <input type=submit value=Submit></p>
+</form>
+
+<form action="http://localhost:9999/kb.php">
+<input type=hidden name=action value=dpv>
+<h2><span>Search the DPV vocabulary</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>Term: <input name=term></label> <input type=submit value=Submit>
+</form>
+
+<form action="http://localhost:9999/kb.php">
+<input type=hidden name=action value=search>
+<h2><span>Search by keywords</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>Keywords: <input name=words></label> <input type=submit value=Submit>
+</form>
 ');
 }
 
@@ -274,8 +354,8 @@ function gdpr(object $db, array $langs)
   # Create query based on whether articles, clauses or sub-clauses are desired.
   $s = 'SELECT language, article, clause, subclause, eli, text FROM gdpr
     WHERE language = :l AND article = :a';
-  if ($m[2]) $s .= ' AND clause = :c';
-  if ($m[3]) $s .= ' AND subclause = :s';
+  if (isset($m[2])) $s .= ' AND clause = :c';
+  if (isset($m[3])) $s .= ' AND subclause = :s';
   $s .= ' ORDER BY clause, subclause';
   $stmt = $db->prepare($s);
 
@@ -283,8 +363,8 @@ function gdpr(object $db, array $langs)
   for ($i = 0; $results == [] && $i < count($langs); $i++) {
     $stmt->bindValue(':l', $langs[$i], PDO::PARAM_STR);
     $stmt->bindValue(':a', $m[1], PDO::PARAM_INT);
-    if ($m[2]) $stmt->bindValue(':c', $m[2], PDO::PARAM_INT);
-    if ($m[3]) $stmt->bindValue(':s', $m[3], PDO::PARAM_STR);
+    if (isset($m[2])) $stmt->bindValue(':c', $m[2], PDO::PARAM_INT);
+    if (isset($m[3])) $stmt->bindValue(':s', $m[3], PDO::PARAM_STR);
     $stmt->execute();
     while (($row = $stmt->fetch())) {
       $n = $row['article'];
@@ -493,8 +573,11 @@ function usage(array $langs)
 
 # main
 
-# Check what languages the client prefers, default to English.
-$langs = get_languages($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? 'en');
+# Check what languages the client prefers. Use the "lang" parameter if
+# given, otherwise the Accept-Language headers if it is present, and
+# fall back to "en" (English).
+$langs = get_languages($_REQUEST['lang'] ? $_REQUEST['lang'] :
+  ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] : 'en'));
 
 # Set up localization of error messages according to the client's languages.
 # If that fails (PHP was not compiled with libintl), make _() a no-op.
@@ -513,7 +596,7 @@ try {
   $db = new PDO(DSN);
   $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
 
-  switch ($_REQUEST['action']) {
+  switch ($_REQUEST['action'] ?? '') {
     case 'search': list($status, $result) = search($db, $langs); break;
     case 'definitions': list($status, $result) = definitions($db, $langs);break;
     case 'gdpr': list($status, $result) = gdpr($db, $langs); break;
