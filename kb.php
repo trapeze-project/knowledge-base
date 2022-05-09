@@ -312,19 +312,19 @@ function dpa(object $db, array $langs)
 {
   $results = [];
 
-  $country = $_REQUEST['country'];
-  $partialname = $_REQUEST['name'];
+  $country = $_REQUEST['country'] ?? '';
+  $partialname = $_REQUEST['name'] ?? '';
 
   # Create a SQL query.
   # Note that parameters are used twice in a query. This only works
   # when PDO::ATTR_EMULATE_PREPARES is set on the database handle.
-  if (isset($country)) {
+  if (!empty($country)) {
     $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
       email, url, id, modified FROM dpa WHERE lower(country) = lower(:country)
       AND (language = :language OR (language = "en" AND
         NOT EXISTS (SELECT * FROM dpa WHERE lower(country) = lower(:country)
           AND language = :language)))');
-  } else if (isset($partialname)) {
+  } else if (!empty($partialname)) {
     $stmt = $db->prepare('SELECT language, country, name, address, tel, fax,
       email, url, id, modified FROM dpa WHERE name LIKE :partialname
       AND (language = :language OR (language = "en" AND
@@ -338,10 +338,10 @@ function dpa(object $db, array $langs)
   # Try the preferred languages until one succeeds.
   $langs[] = 'en';              # Add English at the end
   for ($i = 0; $results == [] && $i < count($langs); $i++) {
-    if (isset($country)) {
+    if (!empty($country)) {
       $stmt->bindValue(':language', $langs[$i], PDO::PARAM_STR);
       $stmt->bindValue(':country', $country, PDO::PARAM_STR);
-    } else if (isset($partialname)) {
+    } else if (!empty($partialname)) {
       $stmt->bindValue(':language', $langs[$i], PDO::PARAM_STR);
       $stmt->bindValue(':partialname', "%$partialname%", PDO::PARAM_STR);
     }
