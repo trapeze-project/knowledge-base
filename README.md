@@ -104,7 +104,7 @@ the document.
 <dt>?action=dpv&amp;term=<var>term</var></dt>
 
 <dd>This returns a JSON file with the definition of a term from the
-[DPV vocabulary](https://w3c.github.io/dpv/dpv/). The term can be a
+<a href="https://w3c.github.io/dpv/dpv/">DPV vocabulary</a>. The term can be a
 full URL (e.g., ‘https://w3id.org/dpv#Transfer’) or just the term
 relative to the vocabulary (e.g., ‘Transfer’). As above, the
 ‘Accept-Language’ header determines the language of the response. (At
