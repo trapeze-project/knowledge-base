@@ -117,3 +117,5 @@ A simple user interface for querying the knowledge base is
 available by using ‘?action=debug’ as the query and opening the URL in
 a browser (e.g.,
 <code>http://localhost:9999/kb.php?action=debug</code>).
+
+![Screendump of the debug window](https://user-images.githubusercontent.com/7431647/167598882-e3f241a3-025a-4ee9-abac-fd2e43719186.png)
