@@ -268,7 +268,7 @@ function gdpr(object $db, array $langs)
   $number = $_REQUEST['article'];
   if (!isset($number))
     return array(400, ERR_MISSING_ARTICLE());
-  if (!preg_match('/^\s*(\d+)(?:\((\d+)\)(?:\((\w)\))?)?\s*$/', $number, $m))
+  if (!preg_match('/^\s*(r?\d+)(?:\((\d+)\)(?:\((\w)\))?)?\s*$/', $number, $m))
     return array(400, ERR_INVALID_ARTICLE());
 
   # Create query based on whether articles, clauses or sub-clauses are desired.
@@ -505,7 +505,7 @@ function testform(object $db, array $langs)
 
 <p>Use these forms to query the knowledge base.
 
-<form action="http://localhost:9999/kb.php">
+<form action="">
 <input type=hidden name=action value=definitions>
 <h2><span>Search definitions of terms</span></h2>
 <p><label>Accept-Language: <input name=lang
@@ -514,7 +514,7 @@ such as it, en, nl, fr or de"></label>
 <label>Term: <input name=term></label> <input type=submit value=Submit></p>
 </form>
 
-<form action="http://localhost:9999/kb.php">
+<form action="">
 <input type=hidden name=action value=gdpr>
 <h2><span>Search GDPR articles by number</span></h2>
 <p><label>Accept-Language: <input name=lang
@@ -523,7 +523,7 @@ such as it, en, nl, fr or de"></label>
 <label>Article: <input name=article></label> <input type=submit value=Submit>
 </form>
 
-<form action="http://localhost:9999/kb.php">
+<form action="">
 <input type=hidden name=action value=dpa>
 <h2><span>Search DPAs by country</span></h2>
 <p><label>Accept-Language: <input name=lang
@@ -532,7 +532,7 @@ such as it, en, nl, fr or de"></label>
 <label>Country code: <input name=country></label> <input type=submit value=Submit>
 </form>
 
-<form action="http://localhost:9999/kb.php">
+<form action="">
 <input type=hidden name=action value=dpa>
 <h2><span>Search DPAs by name</span></h2>
 <p><label>Accept-Language: <input name=lang
@@ -541,7 +541,7 @@ such as it, en, nl, fr or de"></label>
 <label>(Partial) name: <input name=name></label> <input type=submit value=Submit>
 </form>
 
-<form action="http://localhost:9999/kb.php">
+<form action="">
 <input type=hidden name=action value=articles>
 <h2><span>Search articles by words from the title or abstract</span></h2>
 <p><label>Accept-Language: <input name=lang
@@ -550,7 +550,7 @@ such as it, en, nl, fr or de"></label>
 <label>Words: <input name=words title="May use NEAR(…), AND, OR, NOT and …*."></label> <input type=submit value=Submit></p>
 </form>
 
-<form action="http://localhost:9999/kb.php">
+<form action="">
 <input type=hidden name=action value=dpv>
 <h2><span>Search the DPV vocabulary</span></h2>
 <p><label>Accept-Language: <input name=lang
@@ -559,7 +559,7 @@ such as it, en, nl, fr or de"></label>
 <label>Term: <input name=term></label> <input type=submit value=Submit>
 </form>
 
-<form action="http://localhost:9999/kb.php">
+<form action="">
 <input type=hidden name=action value=search>
 <h2><span>Search by keywords</span></h2>
 <p><label>Accept-Language: <input name=lang
