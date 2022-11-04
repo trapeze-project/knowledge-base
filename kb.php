@@ -27,6 +27,7 @@ define('SKOS_RELATED', 'http://www.w3.org/2004/02/skos/core#related');
 define('SW_TERMSTATUS', 'http://www.w3.org/2003/06/sw-vocab-status/ns#term_status');
 define('DPA', 'https://w3id.org/dpv#DataProtectionAuthority');
 define('NS_SEARCH_RESULTS', 'https://trapeze-project.eu/ns/search-results#');
+define('NS_THREAT_INFO', 'https://trapeze-project.eu/ns/threat-info#');
 
 # Error messages. These functions call gettext() to return a localized message.
 
@@ -295,7 +296,7 @@ function gdpr(object $db, array $langs)
           '@language' => $row['language'],
           '@vocab' => NS_GDPR ],
         'n' => $n,
-	'eli' => $row['eli'],
+	      'eli' => $row['eli'],
         'text' => $row['text'] ];
     }
   }
@@ -475,6 +476,72 @@ function dpv(object $db, array $langs)
 }
 
 
+# threat -- return information about a set of threats
+function threat(object $db, array $langs)
+{
+  $categories = $_REQUEST['category'];
+
+  $results = [];
+
+  # Get the description and actions for each category.
+  foreach ($categories as $category) {
+
+    # Get the description of this threat category.
+    $stmt = $db->prepare('SELECT language, description
+      FROM threat_verdict_category_info
+      WHERE verdict_category = :c AND language = :l');
+
+    # Try the preferred languages until one succeeds.
+    $description = '';
+    for ($i = 0; $description == '' && $i < count($langs); $i++) {
+      $stmt->bindValue(':c', $category, PDO::PARAM_STR);
+      $stmt->bindValue(':l', $langs[$i], PDO::PARAM_STR);
+      $res = $stmt->execute();
+      if (($row = $stmt->fetch())) {
+        $language = $row['language'];
+        $description = $row['description'];
+      }
+    }
+
+    # Get the actions for this threat category, their priorities and
+    # their descriptions, into an array $actions.
+    $stmt = $db->prepare(
+      'SELECT t.sequence, a.priority, a.language, a.description
+      FROM threat_resolution_actions AS t, threat_action_info AS a
+      WHERE t.verdict_category = :c AND t.action = a.action AND a.language = :l
+      ORDER BY t.sequence');
+
+    # Try the preferred languages until one succeeds.
+    $actions = [];
+    for ($i = 0; $actions == [] && $i < count($langs); $i++) {
+      $stmt->bindValue(':c', $category, PDO::PARAM_STR);
+      $stmt->bindValue(':l', $langs[$i], PDO::PARAM_STR);
+      $res = $stmt->execute();
+      while (($row = $stmt->fetch()))
+      if ($row['language'] == $language)
+        $actions[] = [
+          'priority' => $row['priority'],
+          'description' => $row['description'] ];
+      else # Not the same language as the threat description
+        $actions[] = [
+          '@context' => ['@language' => $row['language']],
+          'priority' => $row['priority'],
+          'description' => $row['description'] ];
+    }
+
+    $results[] = [
+      '@context' => [
+        '@vocab' => NS_THREAT_INFO,
+        '@language' => $language ],
+      'category' => $category,
+      'description' => $description,
+      'actions' => $actions ];
+  }
+
+  return array(200, $results);
+}
+
+
 # status -- return some information about the service
 function status(object $db, array $langs)
 {
@@ -487,6 +554,15 @@ function status(object $db, array $langs)
 # testform -- return an HTML form with a minimal user interface
 function testform(object $db, array $langs)
 {
+  # Get the list of known threat categories from the database.
+  $categories = '';
+  $stmt = $db->prepare('SELECT verdict_category
+    FROM threat_verdict_category_info
+    ORDER by verdict_category');
+  $res = $stmt->execute();
+  while (($row = $stmt->fetch()))
+    $categories .= '<option>' . htmlspecialchars($row['verdict_category']);
+
   return array(202, _('<!DOCTYPE html>
 <html lang=en>
 <title>TRAPEZE knowledge base test</title>
@@ -567,6 +643,17 @@ title="Zero or more comma-separated language codes
 such as it, en, nl, fr or de"></label>
 <label>Keywords: <input name=words></label> <input type=submit value=Submit>
 </form>
+
+<form action="">
+<input type=hidden name=action value=threat>
+<h2><span>Explain threats</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>Threat categories: <select multiple name="category[]">
+' . $categories . '
+</select> <input type=submit value=Submit>
+</form>
 '));
 }
 
@@ -612,6 +699,7 @@ try {
     case 'status': list($status, $result) = status($db, $langs); break;
     case 'articles': list($status, $result) = articles($db, $langs); break;
     case 'dpv': list($status, $result) = dpv($db, $langs); break;
+    case 'threat': list($status, $result) = threat($db, $langs); break;
     case 'debug': list($status, $result) = testform($db, $langs); break;
     default: list($status, $result) = usage($langs);
   }
