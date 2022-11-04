@@ -111,6 +111,15 @@ relative to the vocabulary (e.g., ‘Transfer’). As above, the
 the moment, labels, notes and human-readable definitions are only
 available in English.)</dd>
 
+<dt>?action=threat&amp;category[]=<var>cat1</var>&amp;category[]=<var>cat2</var>…</dt>
+
+<dd>This returns descriptions and recommended actions for each of the
+threat categories whose names are passed. The return value is a JSON
+file with an array containing one record for each category. Each
+record contains a description of the category and an array of actions.
+Each action is a record with two parts: a priority (an integer) and a
+description of the action.</dd>
+
 </dl>
 
 A simple user interface for querying the knowledge base is
