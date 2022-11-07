@@ -283,7 +283,7 @@ function gdpr(object $db, array $langs)
   # Try the preferred languages until one succeeds.
   for ($i = 0; $results == [] && $i < count($langs); $i++) {
     $stmt->bindValue(':l', $langs[$i], PDO::PARAM_STR);
-    $stmt->bindValue(':a', $m[1], PDO::PARAM_INT);
+    $stmt->bindValue(':a', $m[1], PDO::PARAM_STR);
     if (isset($m[2])) $stmt->bindValue(':c', $m[2], PDO::PARAM_INT);
     if (isset($m[3])) $stmt->bindValue(':s', $m[3], PDO::PARAM_STR);
     $stmt->execute();
