@@ -711,15 +711,13 @@ try {
 # Return the result, either an error message in HTML or a bit of JSON.
 if ($status != 200) {
   header($_SERVER['SERVER_PROTOCOL'] . ' ' . $status);
-  if (isset($_SERVER['HTTP_ORIGIN']))
-    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+  header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? '*'));
   header('Vary: Origin');
   header('Content-Type: text/html;charset=utf-8');
   echo $result;
 } else {
   header($_SERVER['SERVER_PROTOCOL'] . ' 200 OK');
-  if (isset($_SERVER['HTTP_ORIGIN']))
-    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+  header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? '*'));
   header('Vary: Origin');
   header('Content-Type: application/json');
   echo json_encode($result, JSON_UNESCAPED_UNICODE);
