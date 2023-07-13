@@ -120,6 +120,20 @@ record contains a description of the category and an array of actions.
 Each action is a record with two parts: a priority (an integer) and a
 description of the action.</dd>
 
+<dt>?action=controller&amp;id=<var>id</var></dt>
+
+<dd>This returns some information, such as the address of a
+‘controller’ (an organisation that hold personal data). It does not
+return the logo of the organisation. For that, use the ‘logo’ action
+(see below). The knowledge base only knows about a handful of
+organisations that play a role in the three TRAPEZE use cases.</dd>
+
+<dt?action=logo&amp;id=<var>id</var></dt>
+
+<dd>Returns the logo (an image) of the organisation with the given
+<var>id</id>. These are are same IDs as used for the ‘controller’
+action.</dd>
+
 </dl>
 
 A simple user interface for querying the knowledge base is
