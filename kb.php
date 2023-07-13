@@ -10,14 +10,17 @@ define('DC_CREATED', 'http://purl.org/dc/terms/created');
 define('DC_CREATOR', 'http://purl.org/dc/terms/creator');
 define('DC_SOURCE', 'http://purl.org/dc/terms/source');
 define('DPV', 'https://w3id.org/dpv#');
+define('DPV_GDPR', 'https://w3id.org/dpv/dpv-gdpr#');
+define('DPV_PD', 'https://w3id.org/dpv/dpv-pd#');
 define('DPV_CONCEPT', 'https://w3id.org/dpv#Concept');
 define('DPV_ISSUBTYPEOF', 'https://w3id.org/dpv#isSubTypeOf');
 define('DC_TERMS', 'http://purl.org/dc/terms/');
 define('DC_VALID', 'http://purl.org/dc/terms/valid');
 define('SCHEMA_ORG', 'http://schema.org/');
 define('NS_GDPR', 'https://trapeze-project.eu/ns/gdpr#');
-define('RDF_ISDEFINEDBY', 'http://www.w3.org/2000/01/rdf-schema#isDefinedBy');
+define('RDFS_ISDEFINEDBY', 'http://www.w3.org/2000/01/rdf-schema#isDefinedBy');
 define('SCHEMA_DATE', 'http://www.w3.org/2001/XMLSchema#date');
+define('SKOS_BROADER', 'http://www.w3.org/2004/02/skos/core#broader');
 define('SKOS_CONCEPT', 'http://www.w3.org/2004/02/skos/core#Concept');
 define('SKOS_DEFINITION', 'http://www.w3.org/2004/02/skos/core#definition');
 define('SKOS_INSCHEME', 'http://www.w3.org/2004/02/skos/core#inScheme');
@@ -37,7 +40,8 @@ function ERR_USAGE()
 <title>Missing or unknown ‘action’ parameter</title>
 <h1>Missing or unknown ‘action’ parameter</h1>
 <p>The ‘action’ parameter must be present and must be one
-of ‘search’, ‘definitions’, ‘gdpr’, ‘articles’, or ‘status’.
+of ‘search’, ‘definitions’, ‘gdpr’, ‘articles’, ‘status’,
+‘articles’, ‘dpv’, ‘threat’, ‘controller’, ‘logo’ or ‘debug’.
 ');
 }
 
@@ -120,6 +124,22 @@ function ERR_NO_SUCH_DPV()
 ');
 }
 
+function ERR_NO_SUCH_CONTROLLER()
+{
+  return _('<title>No such controller</title>
+<h1>No such controller</h1>
+<p>No controller with the given ID exists in the database.
+');
+}
+
+function ERR_NO_CONTROLLER_LOGO()
+{
+  return _('<title>No such logo</title>
+<h1>No such logo</h1>
+<p>No logo found for this controller.
+');
+}
+
 function ERR_MISSING_DPV_TERM()
 {
   return _('<html lang=en>
@@ -127,6 +147,17 @@ function ERR_MISSING_DPV_TERM()
 <h1>Missing ‘term’ parameter</h1>
 <p>When the ‘action’ parameter is ‘dpv’,
 the ‘term’ parameter is required.
+');
+}
+
+
+function ERR_MISSING_CONTROLLER_ID()
+{
+  return _('<html lang=en>
+<title>Missing ‘id’ parameter</title>
+<h1>Missing ‘id’ parameter</h1>
+<p>When the ‘action’ parameter is ‘controller’ or ‘logo’,
+the ‘id’ parameter is required.
 ');
 }
 
@@ -383,32 +414,43 @@ function dpv(object $db, array $langs)
   $term = $_REQUEST['term'];
   if (!isset($term)) return array(400, ERR_MISSING_DPV_TERM());
 
-  # If is not a full URL, prefix it with the DPV namespace.
-  if (strcmp(substr($term, 0, strlen(DPV)), DPV) !== 0) $term = DPV . $term;
+  # Find the term and the creation date. If the term is not a full
+  # URL, try with the DPV, DPV-PD and DPV_GDPR namespaces.
+  $stmt = $db->prepare('SELECT term, created FROM dpv_terms WHERE term = :t');
+  if (preg_match('/^[a-z]+:/i', $term)) {
+    $res = $stmt->execute([':t' => DPV . $term]);
+    $row = $stmt->fetch();
+  } else {
+    foreach ([DPV, DPV_PD, DPV_GDPR] as $ns) {
+      $res = $stmt->execute([':t' => $ns . $term]);
+      $row = $stmt->fetch();
+      if ($row) {$term = $ns . $term; break;}
+    }
+  }
+  if (! $row) return array(400, ERR_NO_SUCH_DPV());
+
+  $created = $row['created'];
 
   # Get the list of sources from the dpv_sources table.
   $sources = [];
   $stmt = $db->prepare('SELECT source FROM dpv_sources WHERE term = :t');
   $res = $stmt->execute([':t' => $term]);
-  while (($row = $stmt->fetch())) {
+  while (($row = $stmt->fetch()))
     $sources[] = ['@id' => $row['source']];
-  }
 
   # Get the list of related terms from the dpv_related table.
   $related = [];
   $stmt = $db->prepare('SELECT related FROM dpv_related WHERE term = :t');
   $res = $stmt->execute([':t' => $term]);
-  while (($row = $stmt->fetch())) {
+  while (($row = $stmt->fetch()))
     $related[] = ['@id' => $row['related']];
-  }
 
   # Get the list of creators from the dpv_creators table.
   $creators = [];
   $stmt = $db->prepare('SELECT creator FROM dpv_creators WHERE term = :t');
   $res = $stmt->execute([':t' => $term]);
-  while (($row = $stmt->fetch())) {
+  while (($row = $stmt->fetch()))
     $creators[] = ['@value' => $row['creator']];
-  }
 
   # Get the definition in the requested language from the dpv_definitions table.
   $definitions = [];
@@ -429,9 +471,8 @@ function dpv(object $db, array $langs)
     WHERE term = :t AND language = :l');
   for ($i = 0; $notes == [] && $i < count($langs); $i++) {
     $res = $stmt->execute([':t' => $term, ':l' => $langs[$i]]);
-    while (($row = $stmt->fetch())) {
+    while (($row = $stmt->fetch()))
       $notes[] = ['@language' => $row['language'], '@value' => $row['note']];
-    }
   }
 
   # Get the human-readable name in the requested language from the
@@ -441,38 +482,51 @@ function dpv(object $db, array $langs)
     WHERE term = :t AND language = :l');
   for ($i = 0; $labels == [] && $i < count($langs); $i++) {
     $res = $stmt->execute([':t' => $term, ':l' => $langs[$i]]);
-    while (($row = $stmt->fetch())) {
+    while (($row = $stmt->fetch()))
       $labels[] = ['@language' => $row['language'], '@value' => $row['label']];
-    }
   }
 
-  # Get the creation date, status and superclass from the dpv_terms table.
-  $results = [];
-  $stmt = $db->prepare('SELECT term, created, term_status, is_sub_type_of
-    FROM dpv_terms WHERE term = :t');
+  # Get the status in the requested language from the dpv_statuses
+  # table.
+  $statuses = [];
+  $stmt = $db->prepare('SELECT language, status FROM dpv_statuses
+    WHERE term = :t AND language = :l');
+  for ($i = 0; $statuses == [] && $i < count($langs); $i++) {
+    $res = $stmt->execute([':t' => $term, ':l' => $langs[$i]]);
+    while (($row = $stmt->fetch()))
+      $statuses[] = ['@language'=>$row['language'], '@value'=>$row['status']];
+  }
+
+  # Get the list of supertypes from the dpv_supertypes table.
+  $supertypes = [];
+  $stmt = $db->prepare('SELECT supertype FROM dpv_supertypes WHERE term = :t');
   $res = $stmt->execute([':t' => $term]);
-  while (($row = $stmt->fetch())) {
-    $results[] = [
-      '@id' => $row['term'],
-      '@type' => [SKOS_CONCEPT, DPV_CONCEPT],
-      DC_CREATED => [ ['@type' => SCHEMA_DATE, '@value' => $row['created']] ],
-      DC_CREATOR => $creators,
-      DC_SOURCE => $sources,
-      RDF_ISDEFINEDBY => [ [ '@id' => DPV ] ],
-      SW_TERMSTATUS => [ ['@language'=>'en', '@value'=>$row['term_status']] ],
-      SKOS_DEFINITION => $definitions,
-      SKOS_INSCHEME => [ ['@id' => DPV] ],
-      SKOS_NOTE => $notes,
-      SKOS_PREFLABEL => $labels,
-      SKOS_RELATED => $related,
-      DPV_ISSUBTYPEOF => [ ['@id' => $row['is_sub_type_of']] ]
-    ];
-  }
+  while (($row = $stmt->fetch()))
+    $supertypes[] = ['@value' => $row['supertype']];
 
-  if ($results == [])
-    return array(400, ERR_NO_SUCH_DPV());
-  else
-    return array(200, $results);
+  # Get the list of vocabularies defining $term from the dpv_vocabs table.
+  $vocabs = [];
+  $stmt = $db->prepare('SELECT vocab FROM dpv_vocabs WHERE term = :t');
+  $res = $stmt->execute([':t' => $term]);
+  while (($row = $stmt->fetch()))
+    $vocabs[] = ['@id' => $row['vocab']];
+
+  $result['@id'] = $term;
+  $result['@type'] = [SKOS_CONCEPT, DPV_CONCEPT];
+  $result[DC_CREATED] = [ ['@type' => SCHEMA_DATE, '@value' => $created] ];
+  if ($creators) $result[DC_CREATOR] = $creators;
+  if ($sources) $result[DC_SOURCE] = $sources;
+  if ($vocabs) $result[RDFS_ISDEFINEDBY] = $vocabs;
+  if ($statuses) $result[SW_TERMSTATUS] = $statuses;
+  if ($supertypes) $result[SKOS_BROADER] = $supertypes;
+  if ($definitions) $result[SKOS_DEFINITION] = $definitions;
+  if ($vocabs) $result[SKOS_INSCHEME] = $vocabs;
+  if ($labels) $result[SKOS_PREFLABEL] = $labels;
+  if ($supertypes) $result[DPV_ISSUBTYPEOF] = $supertypes;
+  if ($notes) $result[SKOS_NOTE] = $notes;
+  if ($related) $result[SKOS_RELATED] = $related;
+
+  return array(200, [ $result ]);
 }
 
 
@@ -542,6 +596,65 @@ function threat(object $db, array $langs)
 }
 
 
+# controller -- return information about a controller identified by id
+function controller(object $db, array $langs)
+{
+  if (!isset($_REQUEST['id'])) return array(400, ERR_MISSING_CONTROLLER_ID());
+  $id = $_REQUEST['id'];
+
+  # Get all information for the controller except the logo.
+  $stmt = $db->prepare('SELECT name, telephone, fax_number, email, url,
+    locality, postal_code, address FROM controllers WHERE id = :i');
+  $res = $stmt->execute([':i' => $id]);
+  if (! ($row = $stmt->fetch()))
+    return array(400, ERR_NO_SUCH_CONTROLLER());
+
+  $results = [
+    '@context' => SCHEMA_ORG,
+    '@type' => 'Organization',
+    '@id' => $id,
+    'name' => $row['name'],
+    'telephone' => $row['telephone'] ?? '',
+    'faxNumber' => $row['fax_number'] ?? '',
+    'email' => $row['email'] ?? '',
+    'url' => $row['url'] ?? '',
+    'address' => [
+      '@type' => 'PostalAddress',
+      'addressLocality' => $row['locality'] ?? '',
+      'postalCode' => $row['postal_code'] ?? '',
+      'streetAddress' => $row['address'] ?? '' ] ];
+
+  # Find the employees of this controller.
+  $employees = [];
+  $stmt = $db->prepare('SELECT name, job_title FROM controller_employees
+    WHERE controller = :i');
+  $res = $stmt->execute([':i' => $id]);
+  while (($row = $stmt->fetch()))
+    $employees[] = [
+      '@type' => 'Person',
+      'name' => $row['name'] ?? '',
+      'jobTitle' => $row['job_title'] ?? '' ];
+
+  $results['employee'] = $employees;
+  return array(200, $results);
+}
+
+
+# logo -- return the logo of a controller identified by id
+function logo(object $db, array $langs)
+{
+  if (!isset($_REQUEST['id']))  return array(400, ERR_MISSING_CONTROLLER_ID());
+  $id = $_REQUEST['id'];
+
+  $stmt = $db->prepare('SELECT logo FROM controllers WHERE id = :i');
+  $res = $stmt->execute([':i' => $id]);
+  if (! ($row = $stmt->fetch()))
+    return array(400, ERR_NO_CONTROLLER_LOGO());
+  else
+    return array(200, $row['logo']);
+}
+
+
 # status -- return some information about the service
 function status(object $db, array $langs)
 {
@@ -563,7 +676,14 @@ function testform(object $db, array $langs)
   while (($row = $stmt->fetch()))
     $categories .= '<option>' . htmlspecialchars($row['verdict_category']);
 
-  return array(202, _('<!DOCTYPE html>
+  # Get some examples of controller IDs
+  $controllers = 'e.g.';
+  $stmt = $db->prepare('SELECT id FROM controllers LIMIT 5');
+  $res = $stmt->execute();
+  while (($row = $stmt->fetch()))
+    $controllers .= ', ' . htmlspecialchars($row['id']);
+
+  return array(202, '<!DOCTYPE html>
 <html lang=en>
 <title>TRAPEZE knowledge base test</title>
 <style>
@@ -654,7 +774,29 @@ such as it, en, nl, fr or de"></label>
 ' . $categories . '
 </select> <input type=submit value=Submit>
 </form>
-'));
+
+<form action="">
+<input type=hidden name=action value=controller>
+<h2><span>Look up a controller</span></h2>
+<p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>ID: <input name=id
+title="' . $controllers . '"></label>
+<input type=submit value=Submit>
+</form>
+
+<form action="">
+<input type=hidden name=action value=logo>
+<h2><span>Look up the logo of a controller</span></h2>
+<p><p><label>Accept-Language: <input name=lang
+title="Zero or more comma-separated language codes
+such as it, en, nl, fr or de"></label>
+<label>ID: <input name=id
+title="' . $controllers . '"></label>
+<input type=submit value=Submit>
+</form>
+');
 }
 
 
@@ -700,6 +842,8 @@ try {
     case 'articles': list($status, $result) = articles($db, $langs); break;
     case 'dpv': list($status, $result) = dpv($db, $langs); break;
     case 'threat': list($status, $result) = threat($db, $langs); break;
+    case 'controller': list($status, $result) = controller($db, $langs); break;
+    case 'logo': list($status, $result) = logo($db, $langs); break;
     case 'debug': list($status, $result) = testform($db, $langs); break;
     default: list($status, $result) = usage($langs);
   }
@@ -708,17 +852,31 @@ try {
   $result = ERR_DATABASE();
 }
 
-# Return the result, either an error message in HTML or a bit of JSON.
+# Return the result, either an error message in HTML (if $status is
+# not 200), a bit of JSON (if $result is an array), or data in some
+# other media type (if $result is a data URL).
 if ($status != 200) {
   header($_SERVER['SERVER_PROTOCOL'] . ' ' . $status);
   header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? '*'));
   header('Vary: Origin');
   header('Content-Type: text/html;charset=utf-8');
   echo $result;
-} else {
+} elseif (is_array($result)) {
   header($_SERVER['SERVER_PROTOCOL'] . ' 200 OK');
   header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? '*'));
   header('Vary: Origin');
   header('Content-Type: application/json');
   echo json_encode($result, JSON_UNESCAPED_UNICODE);
+} elseif (preg_match('/^data:([^;,]+);base64,(.*)$/', $result, $matches)) {
+  header($_SERVER['SERVER_PROTOCOL'] . ' 200 OK');
+  header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? '*'));
+  header('Vary: Origin');
+  header('Content-Type: ' . $matches[1]);
+  echo base64_decode($matches[2]);
+} else {
+  header($_SERVER['SERVER_PROTOCOL'] . ' 500');
+  header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? '*'));
+  header('Vary: Origin');
+  header('Content-Type: text/html;charset=utf-8');
+  echo '<p>Software bug!';
 }
