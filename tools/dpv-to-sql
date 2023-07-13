@@ -1,36 +1,50 @@
 #!/bin/bash -p
 #
-# Helper to download the DPV vocabulary (in JSON-LD) and create SQL
-# statements to insert the vocabulary into the database.
+# Helper to download the DPV vocabularies (in JSON-LD) and create SQL
+# statements to insert them into the database.
 #
-# Run this script as
+# To run:
 #
-#    ./tools/dpv-to-sql >dpv.sql
+# 1) Download release v1 (5 Dec 2022) of the DPV vocabularies as a zip
+# file from GitHub:
 #
-# to create SQL statements in dpv.sql and then run
+#    wget https://github.com/w3c/dpv/releases/download/dpv-v1/dpv.zip
 #
-#    sqlite3 -batch database.db <dpv.sql
+# 2) Extract three files with vocabularies in JSON-LD from the zip:
 #
-# to (re)create the tables in database.db.
+#    unzip dpv.zip dpv/dpv.jsonld dpv-pd/dpv-pd.jsonld dpv-gdpr/dpv-gdpr.jsonld
 #
-# Requires curl and jshon.
+# 3) Run this script to convert those JSON-LD files to SQL:
+#
+#    ./tools/dpv-to-sql dpv/dpv.jsonld dpv-pd/dpv-pd.jsonld dpv-gdpr/dpv-gdpr.jsonld >dpv.sql
+#
+# 4) run sqlite3 on the generated SQL to add the vocabularies to the
+# database:
+#
+#    sqlite3 database.db <dpv.sql
+#
+#
+# This script requires jshon.
 #
 # This is not designed to be fast.
 #
+# Modified: 12 July 2023: add the DPV-PD and DPV-GDPR vocabularies.
+#
 # Created: 21 February 2022
 # Author: Bert Bos <bert@w3.org>
-
-SOURCE=https://w3c.github.io/dpv/dpv/dpv.jsonld
 
 DC_CREATED='http://purl.org/dc/terms/created'
 DC_CREATOR='http://purl.org/dc/terms/creator'
 DC_SOURCE='http://purl.org/dc/terms/source'
 DPV_ISSUBTYPEOF='https://w3id.org/dpv#isSubTypeOf'
+# SKOS_BROADER='http://www.w3.org/2004/02/skos/core#broader'
 SKOS_DEFINITION='http://www.w3.org/2004/02/skos/core#definition'
+# SKOS_INSCHEME='http://www.w3.org/2004/02/skos/core#inScheme'
 SKOS_LABEL='http://www.w3.org/2004/02/skos/core#prefLabel'
 SKOS_NOTE='http://www.w3.org/2004/02/skos/core#note'
 SKOS_RELATED='http://www.w3.org/2004/02/skos/core#related'
 SW_TERMSTATUS='http://www.w3.org/2003/06/sw-vocab-status/ns#term_status'
+RDFS_ISDEFINEDBY='http://www.w3.org/2000/01/rdf-schema#isDefinedBy'
 
 
 # die -- print error message and exit
@@ -42,152 +56,213 @@ function die
 
 
 set -u +a -o pipefail
-
 declare -i i j n m
 
-# Download the DPV vocabulary in JSON-LD format into a temporary file.
-trap 'rm $TMP' 0
-TMP=`mktemp /tmp/dpv-XXXXXX` || exit 1
-curl -s -f $SOURCE >$TMP || die "Failed to download $SOURCE"
-# TMP=tmp.jsonld
-
-# Remove any existing tables and create new ones.
+# Generate SQL statements to remove any existing tables and create new ones.
 #
+echo "DROP TABLE IF EXISTS dpv_vocabs;"
 echo "DROP TABLE IF EXISTS dpv_related;"
 echo "DROP TABLE IF EXISTS dpv_sources;"
 echo "DROP TABLE IF EXISTS dpv_notes;"
+echo "DROP TABLE IF EXISTS dpv_statuses;"
+echo "DROP TABLE IF EXISTS dpv_supertypes;"
 echo "DROP TABLE IF EXISTS dpv_labels;"
 echo "DROP TABLE IF EXISTS dpv_definitions;"
 echo "DROP TABLE IF EXISTS dpv_creators;"
 echo "DROP TABLE IF EXISTS dpv_terms;"
 echo
-echo "CREATE TABLE dpv_terms (\
-  term TEXT PRIMARY KEY,\
-  created TEXT,\
-  term_status TEXT,\
-  is_sub_type_of TEXT);"
-echo "CREATE TABLE dpv_creators (\
-  creator TEXT NOT NULL,\
+echo "CREATE TABLE dpv_terms (
+  term TEXT PRIMARY KEY,
+  created TEXT DEFAULT CURRENT_DATE);"
+echo "CREATE TABLE dpv_creators (
+  creator TEXT NOT NULL,
   term TEXT REFERENCES dpv_terms);"
-echo "CREATE TABLE dpv_definitions (\
-  language TEXT,\
-  term TEXT REFERENCES dpv_terms,\
-  definition TEXT NOT NULL);"
-echo "CREATE TABLE dpv_labels (\
-  language TEXT,\
-  term TEXT REFERENCES dpv_terms,\
-  label TEXT NOT NULL);"
-echo "CREATE TABLE dpv_notes (\
-  language TEXT,\
-  term TEXT REFERENCES dpv_terms,\
-  note TEXT NOT NULL);"
-echo "CREATE TABLE dpv_sources (\
-  term TEXT REFERENCES dpv_terms,\
-  source TEXT NOT NULL);"
-echo "CREATE TABLE dpv_related (\
-  term TEXT REFERENCES dpv_terms,\
-  related TEXT NOT NULL);"
+echo "CREATE TABLE dpv_definitions (
+  language TEXT,
+  definition TEXT NOT NULL,
+  term TEXT REFERENCES dpv_terms);"
+echo "CREATE TABLE dpv_labels (
+  language TEXT,
+  label TEXT NOT NULL,
+  term TEXT REFERENCES dpv_terms);"
+echo "CREATE TABLE dpv_supertypes (
+  supertype TEXT NOT NULL,
+  term TEXT REFERENCES dpv_terms);"
+echo "CREATE TABLE dpv_statuses (
+  language TEXT,
+  status TEXT,
+  term TEXT REFERENCES dpv_terms);"
+echo "CREATE TABLE dpv_notes (
+  language TEXT,
+  note TEXT NOT NULL,
+  term TEXT REFERENCES dpv_terms);"
+echo "CREATE TABLE dpv_sources (
+  source TEXT NOT NULL,
+  term TEXT REFERENCES dpv_terms);"
+echo "CREATE TABLE dpv_related (
+  related TEXT NOT NULL,
+  term TEXT REFERENCES dpv_terms);"
+echo "CREATE TABLE dpv_vocabs (
+  vocab TEXT NOT NULL,
+  term TEXT REFERENCES dpv_terms);"
 echo
 
-# Loop over the items in the JSON array and translate them to SQL
-# statements.
+# Loop over the command line arguments (which must be JSON files).
 #
-n=$(jshon -Q -F $TMP -l)
-for ((i = 0; i < n; i++)); do
+for source; do
+  echo "Processing $source" >&2
 
-  echo -e "$i/$n\r\c" >&2
-
-  echo "-- Item $i"
-
-  # Store one item in a variable, so that jshon only has to parse that
-  # one item.
+  # Loop over the items in the JSON array and translate them to SQL
+  # statements.
   #
-  item=$(jshon -F $TMP -e $i -j)
+  n=$(jshon -Q -F $source -l)
+  for ((i = 0; i < n; i++)); do
 
-  # The @id is the term to define. It has zero or one creation date,
-  # zero or one status (typically "accepted"), and zero or one
-  # superclass. TODO: All of these are arrays in the JSON, can they
-  # ever be more than one?
-  #
-  h=$(jshon -Q -e @id -u <<<"$item")
-  [[ -n "$h" ]] && term=\"${h//\"/\"\"}\" || die "No @id in item $i"
-  h=$(jshon -Q -e $DC_CREATED -e 0 -e @value -u <<<"$item")
-  [[ -n "$h" ]] && created=\"${h//\"/\"\"}\" || created=NULL
-  h=$(jshon -Q -e $SW_TERMSTATUS -e 0 -e @value -u <<<"$item")
-  [[ -n "$h" ]] && term_status=\"${h//\"/\"\"}\" || term_status=NULL
-  h=$(jshon -Q -e $DPV_ISSUBTYPEOF -e 0 -e @id -u <<<"$item")
-  [[ -n "$h" ]] && is_sub_type_of=\"${h//\"/\"\"}\" || is_sub_type_of=NULL
-  echo "INSERT INTO dpv_terms (term, created, term_status, is_sub_type_of)\
-    VALUES ($term, $created, $term_status, $is_sub_type_of);"
+    echo -e "Term $((i+1)) of $n\r\c" >&2
 
-  # Each term has zero or more creators (people who helped develop
-  # it). Store those in the dpv_creators table.
-  #
-  m=$(jshon -Q -e $DC_CREATOR -l <<<"$item") || m=0
-  for ((j = 0; j < m; j++)); do
-    h=$(jshon -Q -e $DC_CREATOR -e $j -e @value -u <<<"$item")
-    [[ -n "$h" ]] && creator=\"${h//\"/\"\"}\" || die "Empty creator on item $i"
-    echo "INSERT INTO dpv_creators (creator, term) VALUES ($creator, $term);"
-  done
+    # Store one item in a variable, so that jshon only has to parse that
+    # one item.
+    #
+    item=$(jshon -F $source -e $i)
 
-  # Each term has definitions in zero or more languages. Store those
-  # in the dpv_definitions table. TODO: Should we check that there is
-  # at least an English one?
-  #
-  m=$(jshon -Q -e $SKOS_DEFINITION -l <<<"$item") || m=0
-  for ((j = 0; j < m; j++)); do
-    h=$(jshon -Q -e $SKOS_DEFINITION -e $j -e @value -u <<<"$item")
-    [[ -n "$h" ]] && def=\"${h//\"/\"\"}\" || die "Empty definition on item $i"
-    h=$(jshon -Q -e $SKOS_DEFINITION -e $j -e @language -u <<<"$item")
-    [[ -n "$h" ]] && language=\"${h//\"/\"\"}\" || language=NULL
-    echo "INSERT INTO dpv_definitions (language, term, definition)\
-      VALUES ($language, $term, $def);"
-  done
+    # Here is a typical item:
+    #
+    # { "@id": "https://w3id.org/dpv#PaymentManagement",
+    #   "@type": [
+    #     "https://w3id.org/dpv#Concept",
+    #     "http://www.w3.org/2004/02/skos/core#Concept" ],
+    #   "http://purl.org/dc/terms/created": [
+    #     { "@type": "http://www.w3.org/2001/XMLSchema#date",
+    #       "@value": "2020-11-04" } ],
+    #   "http://purl.org/dc/terms/creator": [
+    #     { "@value": "Beatriz Esteves" },
+    #     { "@value": "Harshvardhan J. Pandit" },
+    #     { "@value": "Georg P Krog" } ],
+    #   "http://www.w3.org/2000/01/rdf-schema#isDefinedBy": [
+    #     { "@id": "https://w3id.org/dpv#" } ],
+    #   "http://www.w3.org/2003/06/sw-vocab-status/ns#term_status": [
+    #     { "@language": "en",
+    #       "@value": "accepted" } ],
+    #   "http://www.w3.org/2004/02/skos/core#broader": [
+    #     { "@id": "https://w3id.org/dpv#ServiceProvision" } ],
+    #   "http://www.w3.org/2004/02/skos/core#definition": [
+    #     { "@language": "en",
+    #       "@value": "Purposes associated with processing and managing payment in relation to service, including invoicing and records" } ],
+    #   "http://www.w3.org/2004/02/skos/core#inScheme": [
+    #     { "@id": "https://w3id.org/dpv#" } ],
+    #   "http://www.w3.org/2004/02/skos/core#prefLabel": [
+    #     { "@language": "en",
+    #       "@value": "Payment Management" } ],
+    #   "https://w3id.org/dpv#isSubTypeOf": [
+    #     { "@id": "https://w3id.org/dpv#ServiceProvision" } ] },
+    #
+    # The @id is the term to define.
+    #
+    # There may be zero or more creation dates, but we only store the
+    # first and use today if there is none.
+    #
+    # We assume that the properties SKOS_BROADER and DPV_ISSUBTYPEOF
+    # always have the same value and only store the latter.
+    #
+    # Ditto for SKOS_INSCHEME and RDFS_ISDEFINEDBY.
+    #
+    # We ignore the "http://www.w3.org/2004/02/skos/core#member"
+    # property and assume it is the inverse of "broader".
+    #
+    term=$(jshon -Q -e @id -u <<<$item)
+    [[ -n "$term" ]] || die "No @id in item $i"
 
-  # Each term has labels (human-readable names) in zero or more
-  # languages. Store those in the dpv_labels table. TODO: Should we
-  # check that there is at least an English one?
-  #
-  m=$(jshon -Q -e $SKOS_LABEL -l <<<"$item") || m=0
-  for ((j = 0; j < m; j++)); do
-    h=$(jshon -Q -e $SKOS_LABEL -e $j -e @value -u <<<"$item")
-    [[ -n "$h" ]] && label=\"${h//\"/\"\"}\" || die "Empty label on item $i"
-    h=$(jshon -Q -e $SKOS_LABEL -e $j -e @language -u <<<"$item")
-    [[ -n "$h" ]] && language=\"${h//\"/\"\"}\" || language=NULL
-    echo "INSERT INTO dpv_labels (language, term, label)\
-      VALUES ($language, $term, $label);"
-  done
+    m=$(jshon -Q -e $DC_CREATED -l <<<$item) || m=0
+    if ((m == 0)); then		# No creation date, use default (i.e., today)
+      echo "INSERT OR REPLACE INTO dpv_terms (term) VALUES (\"$term\");"
+    else
+      h=$(jshon -Q -e $DC_CREATED -e 0 -e @value -u <<<$item)
+      [[ -n "$h" ]] || die "Missing @value for date created in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_terms (term, created)" \
+	   "VALUES (\"$term\", \"${h//\"/\"\"}\");"
+    fi
 
-  # Each term has notes in zero or more languages. Store those in the
-  # dpv_notes table.
-  #
-  m=$(jshon -Q -e $SKOS_NOTE -l <<<"$item") || m=0
-  for ((j = 0; j < m; j++)); do
-    h=$(jshon -Q -e $SKOS_NOTE -e $j -e @value -u <<<"$item")
-    [[ -n "$h" ]] && note=\"${h//\"/\"\"}\" || die "Empty note on item $i"
-    h=$(jshon -Q -e $SKOS_NOTE -e $j -e @language -u <<<"$item")
-    [[ -n "$h" ]] && language=\"${h//\"/\"\"}\" || language=NULL
-    echo "INSERT INTO dpv_notes (language, term, note) VALUES ($language, $term, $note);"
-  done
+    m=$(jshon -Q -e $DC_CREATOR -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      h=$(jshon -Q -e $DC_CREATOR -e $j -e @value -u <<<$item)
+      [[ -n "$h" ]] || die "Missing @value for creator $j in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_creators (term, creator)" \
+	   "VALUES (\"$term\", \"${h//\"/\"\"}\");"
+    done
 
-  # Each term has zero or more sources (documents by which this term
-  # was inspired). Each source is a URL.
-  #
-  m=$(jshon -Q -e $DC_SOURCE -l <<<"$item") || m=0
-  for ((j = 0; j < m; j++)); do
-    h=$(jshon -Q -e $DC_SOURCE -e $j -e @id -u <<<"$item")
-    [[ -n "$h" ]] && source=\"${h//\"/\"\"}\" || die "Empty source on item $i"
-    echo "INSERT INTO dpv_sources (term, source) VALUES ($term, $source);"
-  done
+    m=$(jshon -Q -e $DC_SOURCE -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      h=$(jshon -Q -e $DC_SOURCE -e $j -e @id -u <<<$item)
+      [[ -n "$h" ]] || die "Missing @id in source $j in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_sources (term, source)" \
+	   "VALUES (\"${term//\"/\"\"}\", \"${h//\"/\"\"}\");"
+    done
 
-  # Each term has zero or more related terms. Each related term is a URL.
-  #
-  m=$(jshon -Q -e $SKOS_RELATED -l <<<"$item") || m=0
-  for ((j = 0; j < m; j++)); do
-    h=$(jshon -Q -e $SKOS_RELATED -e $j -e @id -u <<<"$item")
-    [[ -n "$h" ]] && related=\"${h//\"/\"\"}\" || die "Empty related on item $i"
-    echo "INSERT INTO dpv_related (term, related) VALUES ($term, $related);"
-  done
+    m=$(jshon -Q -e $SW_TERMSTATUS -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      lang=$(jshon -Q -e $SW_TERMSTATUS -e $j -e @language -u <<<$item)
+      [[ -n "$lang" ]] || die "Missing @language for status $j in item $i ($term)"
+      status=$(jshon -Q -e $SW_TERMSTATUS -e $j -e @value -u <<<$item)
+      [[ -n "$status" ]] || die "Missing @value for status $j in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_statuses (term, language, status)" \
+	   "VALUES (\"$term\", \"${lang//\"/\"\"}\", \"${status//\"/\"\"}\");"
+    done
 
-  echo
-done
+    m=$(jshon -Q -e $SKOS_DEFINITION -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      lang=$(jshon -Q -e $SKOS_DEFINITION -e $j -e @language -u <<<$item)
+      [[ -n "$lang" ]] || die "Missing @language for definition $j in item $i ($term)"
+      def=$(jshon -Q -e $SKOS_DEFINITION -e $j -e @value -u <<<$item)
+      [[ -n "$def" ]] || die "Missing @value for definition $j in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_definitions (term, language, definition)" \
+	   "VALUES (\"$term\", \"${lang//\"/\"\"}\", \"${def//\"/\"\"}\");"
+    done
+
+    m=$(jshon -Q -e $SKOS_LABEL -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      lang=$(jshon -Q -e $SKOS_LABEL -e $j -e @language -u <<<$item)
+      [[ -n "$lang" ]] || lang="en" # Assume English if missing
+      label=$(jshon -Q -e $SKOS_LABEL -e $j -e @value -u <<<$item)
+      [[ -n "$label" ]] || die "Missing @value for label $j in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_labels (term, language, label)" \
+	   "VALUES (\"$term\", \"${lang//\"/\"\"}\", \"${label//\"/\"\"}\");"
+    done
+
+    m=$(jshon -Q -e $DPV_ISSUBTYPEOF -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      h=$(jshon -Q -e $DPV_ISSUBTYPEOF -e $j -e @id -u <<<$item)
+      [[ -n "$h" ]] || die "Missing @id for isSubTypeOf $j in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_supertypes (term, supertype)" \
+	   "VALUES (\"$term\", \"${h//\"/\"\"}\");"
+    done
+
+    m=$(jshon -Q -e $SKOS_NOTE -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      note=$(jshon -Q -e $SKOS_NOTE -e $j -e @value -u <<<$item)
+      [[ -n "$note" ]] || die "Missing @value in note $j in item $i ($term)"
+      lang=$(jshon -Q -e $SKOS_NOTE -e $j -e @language -u <<<$item)
+      [[ -n "$lang" ]] || language=en # Default to English
+      echo "INSERT OR REPLACE INTO dpv_notes (language, term, note) VALUES" \
+	   "(\"${lang//\"/\"\"}\", \"${term//\"/\"\"}\", \"${note//\"/\"\"}\");"
+    done
+
+    m=$(jshon -Q -e $SKOS_RELATED -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      h=$(jshon -Q -e $SKOS_RELATED -e $j -e @id -u <<<$item)
+      [[ -n "$h" ]] || die "Missing @id in related $j in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_related (term, related)" \
+	   "VALUES (\"${term//\"/\"\"}\", \"${h//\"/\"\"}\");"
+    done
+
+    m=$(jshon -Q -e $RDFS_ISDEFINEDBY -l <<<$item) || m=0
+    for ((j = 0; j < m; j++)); do
+      h=$(jshon -Q -e $RDFS_ISDEFINEDBY -e $j -e @id -u <<<$item)
+      [[ -n "$h" ]] || die "Missing @id in isDefinedBy $j in item $i ($term)"
+      echo "INSERT OR REPLACE INTO dpv_vocabs (term, vocab)" \
+	   "VALUES (\"${term//\"/\"\"}\", \"${h//\"/\"\"}\");"
+    done
+
+  done				# Loop over terms
+  echo >&2
+
+done				# Loop over sources
