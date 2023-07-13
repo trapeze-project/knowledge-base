@@ -131,7 +131,7 @@ organisations that play a role in the three TRAPEZE use cases.</dd>
 <dt?action=logo&amp;id=<var>id</var></dt>
 
 <dd>Returns the logo (an image) of the organisation with the given
-<var>id</id>. These are are same IDs as used for the ‘controller’
+<var>id</var>. These are are same IDs as used for the ‘controller’
 action.</dd>
 
 </dl>
