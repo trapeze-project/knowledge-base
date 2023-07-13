@@ -128,7 +128,7 @@ return the logo of the organisation. For that, use the ‘logo’ action
 (see below). The knowledge base only knows about a handful of
 organisations that play a role in the three TRAPEZE use cases.</dd>
 
-<dt?action=logo&amp;id=<var>id</var></dt>
+<dt>?action=logo&amp;id=<var>id</var></dt>
 
 <dd>Returns the logo (an image) of the organisation with the given
 <var>id</var>. These are are same IDs as used for the ‘controller’
